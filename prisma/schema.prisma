@@ -5,14 +5,20 @@
 // (prisma/schema.dev.prisma) with the provider swapped to "sqlite" and runs
 // `prisma db push` / `prisma studio` against a local SQLite file (prisma/dev.db).
 //
-// Because SQLite must work in dev, this schema avoids features SQLite cannot
-// handle. In particular: NO Prisma `enum` blocks (SQLite does not support them).
-// Fixed value sets are modeled as `String` columns and validated with Zod in the
-// application layer. Also avoid PostgreSQL-only native types so the two providers
-// stay compatible.
+// SQLite-compatibility rules honored throughout this schema:
+//   - NO Prisma `enum` blocks (SQLite has none). Every deliberately-fixed value
+//     set is a `String` column, validated by Zod in src/schemas/enums.ts. The
+//     allowed values are listed in a comment above each such field.
+//   - NO `Json` scalar (unsupported on SQLite). JSON payloads are stored as
+//     `String` (serialize/parse in the service layer).
+//   - NO PostgreSQL-only native types.
+//   - Dates are stored as `DateTime`. Jalali is a presentation/computation
+//     concern handled by src/lib/jalali.ts; storing a real date keeps the
+//     range queries and indexes (e.g. period expiry window) working on both
+//     providers. Money is `BigInt` (integer Toman). Ids are cuid strings.
 //
-// Domain models are added in Phase 2 (Data model). Phase 1 only establishes the
-// plumbing: the datasource, the generator, and the dev/prod switching mechanism.
+// Names follow docs/knowledge/02-glossary.md exactly. No computed value has a
+// column (docs/knowledge/07-critical-rules.md rule 2).
 
 generator client {
   provider = "prisma-client-js"
@@ -21,4 +27,434 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// People and access
+// ============================================================================
+
+model Employee {
+  id           String   @id @default(cuid())
+  fullName     String // 2-100
+  mobile       String   @unique // 11 digits, used as username
+  email        String?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  role         String // Role: MANAGER | SUPERVISOR | EMPLOYEE
+  passwordHash String // bcrypt; never returned to the client
+  status       Boolean  @default(true) // active/inactive
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedCases           Case[]                @relation("CaseOwner")
+  cancelledCases       Case[]                @relation("CaseCancelledBy")
+  ownedTasks           Task[]                @relation("TaskOwner")
+  createdTasks         Task[]                @relation("TaskCreatedBy")
+  recordedPayments     Payment[]             @relation("PaymentRecordedBy")
+  createdFollowUps     FollowUp[]            @relation("FollowUpCreatedBy")
+  changedStages        CaseStage[]           @relation("StageLastChangedBy")
+  permissionExceptions PermissionException[]
+  notifications        Notification[]
+  activityHistory      ActivityHistory[]
+
+  @@index([status])
+  @@index([departmentId])
+}
+
+model Department {
+  id     String  @id @default(cuid())
+  title  String  @unique
+  active Boolean @default(true)
+  order  Int     @default(0) // manual ordering
+
+  employees Employee[]
+}
+
+// Stores only the DIFFERENCES from the role default, never the whole set.
+model PermissionException {
+  id            String  @id @default(cuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  permissionKey String // e.g. "financial.record_payment"
+  allowed       Boolean // the override value
+
+  @@unique([employeeId, permissionKey])
+}
+
+// ============================================================================
+// Customer
+// ============================================================================
+
+model Customer {
+  id                 String   @id @default(cuid())
+  code               String   @unique // immutable, e.g. CU-1405-0013
+  type               String // CustomerType: NATURAL | LEGAL
+  fullName           String? // required when NATURAL (2-100)
+  companyName        String? // required when LEGAL (2-150)
+  mobile             String   @unique // 11 digits, unique system-wide
+  nationalId         String? // 10 digits (natural); NOT unique (soft warning only)
+  nationalEntityId   String? // 11 digits (legal); NOT unique
+  registrationNumber String? // up to 20 (legal)
+  birthDate          DateTime? // Jalali; not future (natural)
+  foundingDate       DateTime? // Jalali; not future (legal)
+  sendGreeting       Boolean  @default(true) // meaningful only if a date exists
+  landline           String?
+  city               String?
+  address            String? // up to 500
+  notes              String? // up to 1000
+  status             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  cases        Case[]
+  birthdayLogs BirthdayLog[]
+}
+
+// ============================================================================
+// Services and their definitions
+// ============================================================================
+
+model ServiceCategory {
+  id     String  @id @default(cuid())
+  title  String  @unique
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  services Service[]
+}
+
+// A definition, not a job. Renewable off -> no durations/reminders/renewal-path.
+model Service {
+  id          String  @id @default(cuid())
+  name        String  @unique // 2-80
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+  description String? // up to 500
+  renewable   Boolean @default(false)
+  status      Boolean @default(true)
+
+  pathStages    ServicePathStage[]
+  durations     ServiceDuration[]
+  reminderRules ReminderRule[]
+  cases         Case[]
+
+  @@index([categoryId])
+}
+
+// Template stages copied onto a case/period (rule 9). Two ordered lists per
+// service, keyed by pathType.
+model ServicePathStage {
+  id        String  @id @default(cuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+  pathType  String // PathType: INITIAL | RENEWAL
+  title     String // 2-120
+  order     Int // position in the list
+
+  @@index([serviceId, pathType, order])
+}
+
+model ServiceDuration {
+  id         String  @id @default(cuid())
+  serviceId  String
+  service    Service @relation(fields: [serviceId], references: [id])
+  title      String // free text ("1 year")
+  monthCount Int // 1-120; expiry uses Jalali month-add (rule 10)
+  isDefault  Boolean @default(false) // at most one true per service
+
+  @@unique([serviceId, title])
+  @@index([serviceId])
+}
+
+model ReminderRule {
+  id        String  @id @default(cuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+  daysBefore Int // positive=before, 0=expiry day, negative=after
+  channel   String // ReminderChannel: INTERNAL_NOTIFICATION | SMS_TO_CUSTOMER
+  recipient String // ReminderRecipient: CASE_OWNER | ALL_MANAGERS | CUSTOMER
+  active    Boolean @default(true)
+
+  sentReminders SentReminder[]
+
+  @@index([serviceId])
+}
+
+// ============================================================================
+// The core chain: Case -> Period -> CaseStage
+// ============================================================================
+
+// A service sold to a customer.
+model Case {
+  id                   String   @id @default(cuid())
+  number               String   @unique // PR-1405-0284, restarts per Jalali year
+  customerId           String
+  customer             Customer @relation(fields: [customerId], references: [id])
+  serviceId            String
+  service              Service  @relation(fields: [serviceId], references: [id])
+  ownerId              String
+  owner                Employee @relation("CaseOwner", fields: [ownerId], references: [id])
+  status               String // CaseStatus: NEW | IN_PROGRESS | COMPLETED | CANCELLED
+  notes                String? // up to 1000
+  lastActivityAt       DateTime @default(now()) // basis for "stale case"
+  cancelledAt          DateTime?
+  cancellationReasonId String?
+  cancellationReason   CancellationReason? @relation(fields: [cancellationReasonId], references: [id])
+  cancellationNote     String? // up to 500
+  cancelledById        String?
+  cancelledBy          Employee? @relation("CaseCancelledBy", fields: [cancelledById], references: [id])
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  periods   Period[]
+  tasks     Task[]
+  followUps FollowUp[]
+
+  @@index([status])
+  @@index([ownerId, status])
+  @@index([customerId])
+  @@index([status, lastActivityAt])
+  @@index([serviceId])
+}
+
+// A validity span. Period 1 = registration; later periods = renewals.
+model Period {
+  id             String    @id @default(cuid())
+  caseId         String
+  case           Case      @relation(fields: [caseId], references: [id])
+  indexNumber    Int // 1 = registration, 2+ = renewals
+  status         String // PeriodStatus: ACTIVE | RENEWED | CANCELLED | ABANDONED
+  startDate      DateTime // Jalali
+  expiryDate     DateTime? // computed once at creation, then a fixed fact; null if non-renewable
+  totalAmount    BigInt? // integer Toman; null -> balance shows "—"
+  followUpStatus String // FollowUpStatus: NOT_FOLLOWED_UP | CONTACTED | AWAITING_CUSTOMER | AGREES_TO_RENEW | NOT_INTERESTED
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  stages        CaseStage[]
+  payments      Payment[]
+  sentReminders SentReminder[]
+  followUps     FollowUp[]
+
+  @@index([status, expiryDate])
+  @@index([caseId])
+  @@index([status, followUpStatus])
+}
+
+// A COPY of a service path stage, bound to one period. Exceptional per-case
+// stages also live here.
+model CaseStage {
+  id              String    @id @default(cuid())
+  periodId        String
+  period          Period    @relation(fields: [periodId], references: [id])
+  title           String // copied from template, or typed for an exceptional stage
+  order           Int // reorderable position
+  status          String // StageStatus: PENDING | IN_PROGRESS | DONE | REJECTED | NOT_NEEDED
+  startedAt       DateTime? // set on Start
+  endedAt         DateTime? // set on Done/Not-Needed; cleared on Reopen
+  attemptCount    Int       @default(0) // +1 on each Reject
+  note            String? // mandatory when Rejected
+  isExceptional   Boolean   @default(false) // per-case added stage (bound to current period only)
+  lastChangedById String?
+  lastChangedBy   Employee? @relation("StageLastChangedBy", fields: [lastChangedById], references: [id])
+
+  @@index([periodId, order])
+  @@index([periodId, status])
+}
+
+// ============================================================================
+// Money
+// ============================================================================
+
+model Payment {
+  id           String   @id @default(cuid())
+  periodId     String
+  period       Period   @relation(fields: [periodId], references: [id])
+  amount       BigInt // integer Toman, > 0
+  receiptDate  DateTime // Jalali; not future
+  methodId     String
+  method       PaymentMethod @relation(fields: [methodId], references: [id])
+  note         String? // up to 300
+  recordedById String
+  recordedBy   Employee @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([periodId])
+  @@index([receiptDate])
+}
+
+model PaymentMethod {
+  id     String  @id @default(cuid())
+  title  String  @unique
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  payments Payment[]
+}
+
+// ============================================================================
+// Tasks and follow-ups
+// ============================================================================
+
+// A personal to-do with a due date - distinct from a Stage.
+model Task {
+  id          String    @id @default(cuid())
+  title       String // 2-150
+  caseId      String?
+  case        Case?     @relation(fields: [caseId], references: [id])
+  ownerId     String
+  owner       Employee  @relation("TaskOwner", fields: [ownerId], references: [id])
+  dueDate     DateTime // Jalali
+  priority    String // TaskPriority: NORMAL | HIGH | URGENT
+  status      String // TaskStatus: OPEN | COMPLETED | CANCELLED
+  note        String? // up to 500
+  closedAt    DateTime? // archive threshold counts from here
+  archivedAt  DateTime? // set when archived (auto or manual)
+  createdById String
+  createdBy   Employee  @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  followUps FollowUp[]
+
+  @@index([ownerId, status])
+  @@index([dueDate, status])
+  @@index([caseId])
+  @@index([status, closedAt])
+}
+
+// A result recorded after doing a task; sits in the case timeline.
+// Immutable (never edited/deleted - a correction is a new row).
+model FollowUp {
+  id          String   @id @default(cuid())
+  taskId      String?
+  task        Task?    @relation(fields: [taskId], references: [id])
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id])
+  periodId    String?
+  period      Period?  @relation(fields: [periodId], references: [id])
+  resultId    String
+  result      FollowUpResult @relation(fields: [resultId], references: [id])
+  note        String? // up to 500
+  createdById String
+  createdBy   Employee @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([caseId, createdAt])
+  @@index([periodId])
+}
+
+// Manager-defined. The logic keys off effectOnRenewal, never the title (B-6).
+model FollowUpResult {
+  id              String  @id @default(cuid())
+  title           String  @unique // 2-60
+  effectOnRenewal String // RenewalEffect: NONE | AGREES_TO_RENEW | NOT_INTERESTED
+  active          Boolean @default(true)
+  order           Int     @default(0)
+
+  followUps FollowUp[]
+}
+
+// Manager-defined.
+model CancellationReason {
+  id     String  @id @default(cuid())
+  title  String  @unique // 2-60
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  cases Case[]
+}
+
+// ============================================================================
+// Engine, messaging, settings, audit
+// ============================================================================
+
+// Enforces "each reminder once per period" in the database (rule 5).
+model SentReminder {
+  id       String   @id @default(cuid())
+  periodId String
+  period   Period   @relation(fields: [periodId], references: [id])
+  ruleId   String
+  rule     ReminderRule @relation(fields: [ruleId], references: [id])
+  channel  String // ReminderChannel
+  sentAt   DateTime @default(now())
+
+  @@unique([periodId, ruleId, channel])
+}
+
+// Enforces "each customer greeted once per year" (rule 5).
+model BirthdayLog {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  year       Int // Jalali year
+  sentAt     DateTime @default(now())
+
+  @@unique([customerId, year])
+}
+
+// Queue + log.
+model SmsMessage {
+  id          String    @id @default(cuid())
+  recipient   String // mobile
+  body        String // rendered from a template
+  templateKey String // which event
+  status      String // QUEUED | SENT | FAILED
+  error       String? // provider error detail
+  createdAt   DateTime  @default(now())
+  sentAt      DateTime?
+
+  @@index([status])
+}
+
+// Manager-defined.
+model SmsTemplate {
+  id       String @id @default(cuid())
+  eventKey String @unique // e.g. renewal_reminder, birthday_natural
+  body     String // with {placeholders}
+}
+
+// Key-value singleton store: institute info, thresholds, birthday switch/hour,
+// gateway config (provider, apiKey [secret], senderNumber, realSendKey),
+// timezone. `value` holds JSON-serialized text (String, for SQLite parity).
+model Setting {
+  key   String @id
+  value String
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      Employee @relation(fields: [userId], references: [id])
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+// Append-only audit trail behind "nothing is deleted".
+model ActivityHistory {
+  id         String   @id @default(cuid())
+  entityType String // e.g. "Case", "Payment"
+  entityId   String
+  action     String // e.g. "stage.done", "case.cancelled"
+  actorId    String?
+  actor      Employee? @relation(fields: [actorId], references: [id])
+  detail     String? // JSON-serialized before/after or context
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+}
+
+model EngineRunLog {
+  id        String   @id @default(cuid())
+  runAt     DateTime @default(now())
+  reminders Int      @default(0)
+  archived  Int      @default(0)
+  abandoned Int      @default(0)
+  greetings Int      @default(0)
+  smsSent   Int      @default(0)
+  errors    Int      @default(0)
+  detail    String? // JSON-serialized error specifics
 }

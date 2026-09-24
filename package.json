@@ -13,24 +13,27 @@
     "db:generate": "prisma generate",
     "db:dev:push": "node scripts/prisma-dev.mjs push",
     "db:dev:studio": "node scripts/prisma-dev.mjs studio",
+    "db:dev:seed": "tsx prisma/seed.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@hookform/resolvers": "^3",
     "@prisma/client": "^6",
     "@tanstack/react-query": "^5",
+    "bcryptjs": "^2.4.3",
     "clsx": "^2",
     "jalaali-js": "^1.2",
     "next": "^15",
     "react": "^19",
     "react-dom": "^19",
     "react-hook-form": "^7",
-    "@hookform/resolvers": "^3",
     "tailwind-merge": "^2",
     "zod": "^3"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -41,14 +44,19 @@
     "prettier": "^3",
     "prisma": "^6",
     "tailwindcss": "^3.4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^2"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "allowScripts": {
     "esbuild@0.21.5": true,
     "@prisma/engines@6.19.3": true,
     "@prisma/client@6.19.3": true,
     "prisma@6.19.3": true,
-    "unrs-resolver@1.12.2": true
+    "unrs-resolver@1.12.2": true,
+    "esbuild@0.28.2": true
   }
 }
