@@ -7,7 +7,7 @@ import {
   formatJalali,
   toJalali,
   toGregorianDate,
-} from "./jalali";
+} from "../jalali";
 
 describe("addMonths - day clamping (critical rule 10)", () => {
   it("clamps 31 Farvardin + 6 months to 30 Mehr (Mehr has 30 days)", () => {

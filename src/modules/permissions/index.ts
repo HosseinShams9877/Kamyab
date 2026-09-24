@@ -8,11 +8,16 @@ export {
   ROLE_DEFAULTS,
   roleDefaults,
   applyExceptions,
+  mergeWithDefaults,
+  computeExceptions,
   can,
   scopeByOwnership,
 } from "./permissions.guard";
 
-export { getEffectivePermissions } from "./permissions.service";
+export {
+  getEffectivePermissions,
+  setEmployeePermissions,
+} from "./permissions.service";
 
 export type {
   PermissionKey,

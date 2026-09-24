@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/modules/auth";
-import { LogoutButton } from "@/components/auth/logout-button";
+import { requireUser, LogoutButton } from "@/modules/auth";
 
 // Management dashboard landing (C-2). Built out in Phase 16; for Phase 3 it is a
 // minimal protected page that proves the session guard and role routing. The

@@ -4,11 +4,13 @@ import {
   ROLE_DEFAULTS,
   roleDefaults,
   applyExceptions,
+  computeExceptions,
+  mergeWithDefaults,
   can,
   scopeByOwnership,
   type PermissionMap,
   type Authorizable,
-} from "./permissions.guard";
+} from "../permissions.guard";
 
 const user = (
   id: string,
@@ -144,5 +146,40 @@ describe("scopeByOwnership — the query-level view all vs view own", () => {
       { permissionKey: "cases.view_own", allowed: false },
     ]);
     expect(scopeByOwnership(user("e1", blind), "cases")).toBeNull();
+  });
+});
+
+describe("mergeWithDefaults & computeExceptions — store only differences (C-12)", () => {
+  it("mergeWithDefaults overlays known keys and ignores unknown ones", () => {
+    const merged = mergeWithDefaults("EMPLOYEE", {
+      "cases.view_all": true,
+      "not.a.real.key": true,
+    });
+    expect(merged["cases.view_all"]).toBe(true);
+    expect(merged["cases.view_own"]).toBe(true); // untouched default
+    expect(Object.keys(merged).sort()).toEqual([...PERMISSION_KEYS].sort());
+  });
+
+  it("computeExceptions returns only keys that differ from the role default", () => {
+    const desired = roleDefaults("EMPLOYEE");
+    desired["cases.view_all"] = true; // grant beyond default
+    desired["cases.create"] = false; // revoke a default
+    const rows = computeExceptions("EMPLOYEE", desired);
+    expect(rows).toHaveLength(2);
+    expect(rows).toContainEqual({ permissionKey: "cases.view_all", allowed: true });
+    expect(rows).toContainEqual({ permissionKey: "cases.create", allowed: false });
+  });
+
+  it("a desired map equal to the role default yields no exceptions", () => {
+    expect(computeExceptions("MANAGER", roleDefaults("MANAGER"))).toEqual([]);
+  });
+
+  it("round-trips: applyExceptions(computeExceptions(desired)) === desired", () => {
+    const desired = mergeWithDefaults("SUPERVISOR", {
+      "employees.create": true,
+      "reports.view": false,
+    });
+    const rows = computeExceptions("SUPERVISOR", desired);
+    expect(applyExceptions("SUPERVISOR", rows)).toEqual(desired);
   });
 });

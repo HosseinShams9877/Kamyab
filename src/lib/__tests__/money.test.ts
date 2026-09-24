@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { formatToman, formatTomanNumber } from "./money";
-import { toPersianDigits, toEnglishDigits } from "./digits";
+import { formatToman, formatTomanNumber } from "../money";
+import { toPersianDigits, toEnglishDigits } from "../digits";
 
 describe("formatTomanNumber", () => {
   it("groups thousands with the Persian separator and uses Persian digits", () => {

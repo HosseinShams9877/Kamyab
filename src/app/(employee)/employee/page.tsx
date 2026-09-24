@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/modules/auth";
-import { LogoutButton } from "@/components/auth/logout-button";
+import { requireUser, LogoutButton } from "@/modules/auth";
 
 // Employee panel landing (C-15). Built out in Phase 16 as the manager pages with
 // an owner-scoped filter; for Phase 3 it is a minimal protected page proving the

@@ -1,24 +1,47 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/modules/auth";
 import { can } from "@/modules/permissions";
+import {
+  createEmployee,
+  createEmployeeSchema,
+  listEmployees,
+} from "@/modules/employees";
 
-// Thin, guarded route (folder-structure.md: parse -> authorize -> service ->
-// respond). It demonstrates the Phase 4 deliverable: a forbidden direct request
-// is rejected server-side regardless of the UI. An Employee (no employees.view
-// by default) gets 403 here even if they craft the request by hand.
+// Thin, guarded routes (folder-structure.md: parse -> authorize -> service ->
+// respond). No domain rules live here — the employees service owns them, and the
+// server guard (`can`) is the real gate regardless of what the UI shows.
+
 export async function GET() {
   const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ ok: false }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
   if (!can(user, "employees.view")) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
-
-  const employees = await prisma.employee.findMany({
-    select: { id: true, fullName: true, role: true, status: true },
-    orderBy: { fullName: "asc" },
-  });
+  const employees = await listEmployees();
   return NextResponse.json({ ok: true, employees });
+}
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!can(user, "employees.create")) {
+    return NextResponse.json({ ok: false }, { status: 403 });
+  }
+
+  const parsed = createEmployeeSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, message: "اطلاعات واردشده معتبر نیست." },
+      { status: 422 },
+    );
+  }
+
+  const result = await createEmployee(parsed.data);
+  if (!result.ok) {
+    return NextResponse.json(
+      { ok: false, field: result.field, message: result.message },
+      { status: 409 },
+    );
+  }
+  return NextResponse.json({ ok: true, id: result.id }, { status: 201 });
 }

@@ -169,6 +169,43 @@ export function applyExceptions(
   return map;
 }
 
+/**
+ * Merge a partial desired map (the permission-matrix payload may omit keys) onto
+ * the role default, producing a COMPLETE map. Unknown keys are ignored so a stale
+ * or hand-crafted payload cannot introduce keys outside the catalog.
+ */
+export function mergeWithDefaults(
+  role: Role,
+  desired: Record<string, boolean>,
+): PermissionMap {
+  const map = roleDefaults(role);
+  const known = new Set<string>(PERMISSION_KEYS);
+  for (const [key, value] of Object.entries(desired)) {
+    if (known.has(key)) map[key as PermissionKey] = value;
+  }
+  return map;
+}
+
+/**
+ * Compute the exception rows to STORE for an employee: given a role and a desired
+ * full map, return only the keys whose value differs from the role default.
+ * Storing only differences keeps PermissionException minimal (database-schema.md)
+ * and lets a later change to a role default flow through automatically.
+ */
+export function computeExceptions(
+  role: Role,
+  desired: PermissionMap,
+): PermissionExceptionRow[] {
+  const defaults = ROLE_DEFAULTS[role];
+  const rows: PermissionExceptionRow[] = [];
+  for (const key of PERMISSION_KEYS) {
+    if (desired[key] !== defaults[key]) {
+      rows.push({ permissionKey: key, allowed: desired[key] });
+    }
+  }
+  return rows;
+}
+
 // ---------------------------------------------------------------------------
 // The guard itself.
 // ---------------------------------------------------------------------------

@@ -2,6 +2,15 @@
 
 > Phase-based plan, ordered by priority and dependency. Each phase lists **what to build**, **dependencies**, a **relative size** (short / medium / long), and a **"done" criterion**. Sizes are relative to each other, not calendar estimates.
 
+## Architecture rules apply to every phase
+
+The **architecture rules** in [08-architecture-rules.md](../knowledge/08-architecture-rules.md)
+apply to every phase below. Every new module must follow the structure described there:
+a self-contained domain module under `src/modules/<domain>/` — service, repository, schema,
+types, guards, `components/`, `hooks/`, `lib/`, and `__tests__/` — behind a single public
+`index.ts`, with anything shared by two or more modules living in the shared `src/` layer.
+See also the layout in [folder-structure.md](folder-structure.md).
+
 ## Ordering rationale
 
 The order follows the dependency graph, not the feature list in the document. Three things must exist before any feature is meaningful: the technical foundation, the data model, and access control. Building a feature page before permissions exist means retrofitting security later — exactly the "hiding a button is not access control" mistake ([07-critical-rules.md](../knowledge/07-critical-rules.md), rule 3). So auth and the permission layer come early (phases 3–4), before any CRUD page.

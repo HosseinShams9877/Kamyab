@@ -17,3 +17,24 @@ export function findExceptionsByEmployee(
     select: { permissionKey: true, allowed: true },
   });
 }
+
+/**
+ * Replace an employee's stored exceptions with exactly `rows`, in a single
+ * transaction (delete-all then recreate). Called only by the permissions
+ * service — other modules go through setEmployeePermissions.
+ */
+export async function replaceExceptions(
+  employeeId: string,
+  rows: readonly PermissionExceptionRow[],
+): Promise<void> {
+  await prisma.$transaction([
+    prisma.permissionException.deleteMany({ where: { employeeId } }),
+    prisma.permissionException.createMany({
+      data: rows.map((r) => ({
+        employeeId,
+        permissionKey: r.permissionKey,
+        allowed: r.allowed,
+      })),
+    }),
+  ]);
+}
