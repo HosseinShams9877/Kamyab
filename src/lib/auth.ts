@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { readSessionCookie, verifySession } from "@/lib/session";
+import { applyExceptions, type PermissionMap } from "@/lib/permissions";
 import type { Role } from "@/types/enums";
 
 // Server-side session resolution and role routing. This is the enforcement point
@@ -14,6 +15,10 @@ export type CurrentUser = {
   id: string;
   fullName: string;
   role: Role;
+  // Effective permission map (role default overridden by stored exceptions),
+  // attached here so every server call has authorization data without a second
+  // query. Used by the `can` / `scopeByOwnership` guard in src/lib/permissions.ts.
+  permissions: PermissionMap;
 };
 
 /**
@@ -28,17 +33,27 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const employee = await prisma.employee.findUnique({
     where: { id: session.userId },
-    select: { id: true, fullName: true, role: true, status: true },
+    select: {
+      id: true,
+      fullName: true,
+      role: true,
+      status: true,
+      // Load the exceptions in the same round-trip; the pure applyExceptions
+      // folds them onto the role default below.
+      permissionExceptions: { select: { permissionKey: true, allowed: true } },
+    },
   });
 
   // Inactive-user rejection (including mid-session): a deactivated account is
   // treated exactly like no session at all.
   if (!employee || !employee.status) return null;
 
+  const role = employee.role as Role;
   return {
     id: employee.id,
     fullName: employee.fullName,
-    role: employee.role as Role,
+    role,
+    permissions: applyExceptions(role, employee.permissionExceptions),
   };
 }
 
