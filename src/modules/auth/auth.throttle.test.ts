@@ -5,7 +5,7 @@ import {
   clearAttempts,
   _resetThrottle,
   throttleConfig,
-} from "./login-throttle";
+} from "./auth.throttle";
 
 const MOBILE = "09120000000";
 

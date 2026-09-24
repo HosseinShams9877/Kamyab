@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/modules/auth";
 
 // Demo/introspection route: returns the current user together with their
 // effective permission map. Any authenticated active user may call it; it exists

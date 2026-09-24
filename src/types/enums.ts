@@ -13,10 +13,10 @@ import type {
   ReminderRecipient,
   RenewalEffect,
   SmsStatus,
-} from "@/schemas/enums";
+} from "./enums.schema";
 
 // Single source for the fixed-enum union types, inferred from the Zod schemas
-// so the values live in exactly one place (src/schemas/enums.ts).
+// so the values live in exactly one place (src/types/enums.schema.ts).
 
 export type Role = z.infer<typeof Role>;
 export type CustomerType = z.infer<typeof CustomerType>;

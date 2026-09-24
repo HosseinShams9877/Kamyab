@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { findSetting } from "./settings.repository";
 
 // Settings service. Settings are stored as key → JSON-serialized string (the
 // value column is a String for SQLite/PostgreSQL parity), so reads parse the
@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 
 /** Read a single setting, parsed from its JSON value. Returns null if absent. */
 export async function getSetting<T = unknown>(key: string): Promise<T | null> {
-  const row = await prisma.setting.findUnique({ where: { key } });
+  const row = await findSetting(key);
   if (!row) return null;
   try {
     return JSON.parse(row.value) as T;

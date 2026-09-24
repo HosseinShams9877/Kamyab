@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
-import { can } from "@/lib/permissions";
+import { getCurrentUser } from "@/modules/auth";
+import { can } from "@/modules/permissions";
 
 // Thin, guarded route (folder-structure.md: parse -> authorize -> service ->
 // respond). It demonstrates the Phase 4 deliverable: a forbidden direct request

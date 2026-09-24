@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { requireUser } from "@/modules/auth";
 import { LogoutButton } from "@/components/auth/logout-button";
 
 // Management dashboard landing (C-2). Built out in Phase 16; for Phase 3 it is a

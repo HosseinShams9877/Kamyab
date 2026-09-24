@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { loginSchema } from "@/schemas/auth";
-import { authenticate } from "@/services/auth.service";
-import { roleRedirect } from "@/lib/auth";
-import { setSessionCookie } from "@/lib/session";
+import {
+  loginSchema,
+  authenticate,
+  roleRedirect,
+  setSessionCookie,
+} from "@/modules/auth";
 import { toPersianDigits } from "@/lib/digits";
 
 // Thin login handler: parse → validate → call the auth service → set the session

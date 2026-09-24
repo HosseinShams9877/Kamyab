@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser, roleRedirect } from "@/lib/auth";
-import { getInstituteName } from "@/services/settings.service";
+import { getCurrentUser, roleRedirect } from "@/modules/auth";
+import { getInstituteName } from "@/modules/settings";
 import { LoginForm } from "@/components/auth/login-form";
 
 // C-1 login page — the only page reachable without a session. The institute name

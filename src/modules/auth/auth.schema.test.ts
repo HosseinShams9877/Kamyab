@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { loginSchema } from "./auth";
+import { loginSchema } from "./auth.schema";
 
 describe("loginSchema (C-1)", () => {
   it("accepts a valid 11-digit 09 mobile and 8+ char password", () => {

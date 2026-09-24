@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { requireUser } from "@/modules/auth";
 import { LogoutButton } from "@/components/auth/logout-button";
 
 // Employee panel landing (C-15). Built out in Phase 16 as the manager pages with

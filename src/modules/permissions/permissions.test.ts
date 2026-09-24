@@ -8,7 +8,7 @@ import {
   scopeByOwnership,
   type PermissionMap,
   type Authorizable,
-} from "./permissions";
+} from "./permissions.guard";
 
 const user = (
   id: string,

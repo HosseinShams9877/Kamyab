@@ -5,7 +5,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import type { z } from "zod";
-import { loginSchema } from "@/schemas/auth";
+// The schema is imported from the module's isomorphic leaf, not the "@/modules/auth"
+// barrel: this is a client component, and the barrel aggregates server-only code
+// (node:crypto sessions, bcrypt) that cannot enter a client bundle. Client
+// components import a module's shared schema/types leaves directly; server code
+// uses the index public API. (Documented in docs/roadmap/folder-structure.md.)
+import { loginSchema } from "@/modules/auth/auth.schema";
 
 // Client login form (C-1). Validation uses the SAME Zod schema the server uses,
 // so the browser gives fast feedback while the server remains the real gate.

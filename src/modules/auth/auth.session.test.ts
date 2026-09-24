@@ -3,7 +3,7 @@ import {
   signSession,
   verifySession,
   SESSION_DURATION_MS,
-} from "./session";
+} from "./auth.session";
 
 // A valid secret must exist for the HMAC to work; set one for the test run.
 beforeAll(() => {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
-import { scopeByOwnership } from "@/lib/permissions";
+import { getCurrentUser } from "@/modules/auth";
+import { scopeByOwnership } from "@/modules/permissions";
 
 // Guarded, owner-scoped list (folder-structure.md thin handler). Demonstrates
 // the "view all vs view own" deliverable: a Manager/Supervisor (cases.view_all)
