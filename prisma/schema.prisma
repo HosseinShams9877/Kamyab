@@ -1,0 +1,24 @@
+// Canonical schema. The datasource provider is PostgreSQL (production).
+//
+// For local development we do NOT install a database server. Instead,
+// `scripts/prisma-dev.mjs` generates a temporary copy of this file
+// (prisma/schema.dev.prisma) with the provider swapped to "sqlite" and runs
+// `prisma db push` / `prisma studio` against a local SQLite file (prisma/dev.db).
+//
+// Because SQLite must work in dev, this schema avoids features SQLite cannot
+// handle. In particular: NO Prisma `enum` blocks (SQLite does not support them).
+// Fixed value sets are modeled as `String` columns and validated with Zod in the
+// application layer. Also avoid PostgreSQL-only native types so the two providers
+// stay compatible.
+//
+// Domain models are added in Phase 2 (Data model). Phase 1 only establishes the
+// plumbing: the datasource, the generator, and the dev/prod switching mechanism.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
