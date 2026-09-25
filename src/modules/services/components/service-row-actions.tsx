@@ -15,7 +15,7 @@ type Props = {
 };
 
 const btn =
-  "rounded-control px-3 py-1.5 text-sm transition-colors disabled:opacity-50";
+  "rounded-control px-3 py-2 text-sm transition-colors disabled:opacity-50 min-h-[44px] sm:min-h-0 sm:py-1.5";
 
 export function ServiceRowActions({ id, status, canEdit }: Props) {
   const router = useRouter();
@@ -60,7 +60,7 @@ export function ServiceRowActions({ id, status, canEdit }: Props) {
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-end gap-1">
         <Link href={`/services/${id}`} className="text-sm text-primary hover:underline">
           مدیریت
         </Link>

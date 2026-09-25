@@ -25,7 +25,7 @@ export function LogoutButton() {
       type="button"
       onClick={onLogout}
       disabled={busy}
-      className="rounded-control border border-border bg-card px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-page disabled:text-disabled"
+      className="min-h-[44px] rounded-control border border-border bg-card px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-page disabled:text-disabled sm:min-h-0"
     >
       {busy ? "در حال خروج…" : "خروج"}
     </button>

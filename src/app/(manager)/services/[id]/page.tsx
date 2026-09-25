@@ -44,8 +44,8 @@ export default async function ServiceDetailPage({ params }: Props) {
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 px-4 py-10">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-text">{service.name}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold text-text break-words">{service.name}</h1>
         <Link href="/services" className="text-sm text-primary hover:underline">
           ← بازگشت به خدمات
         </Link>

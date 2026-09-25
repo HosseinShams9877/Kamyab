@@ -23,7 +23,7 @@ type Props = {
 const inputClass =
   "w-full rounded-control border border-border bg-card px-3 py-2 text-text outline-none transition-colors focus:border-primary";
 const btn =
-  "rounded-control px-3 py-1.5 text-sm transition-colors disabled:opacity-50";
+  "rounded-control px-3 py-2 text-sm transition-colors disabled:opacity-50 min-h-[44px] sm:min-h-0 sm:py-1.5";
 
 export function PathEditor({ serviceId, pathType, stages, canEdit }: Props) {
   const router = useRouter();
@@ -173,7 +173,7 @@ export function PathEditor({ serviceId, pathType, stages, canEdit }: Props) {
                     <>
                       <span className="flex-1 text-sm text-text">{stage.title}</span>
                       {canEdit && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
                           <button
                             type="button"
                             title="بالا"

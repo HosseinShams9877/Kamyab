@@ -15,7 +15,7 @@ import type { BirthdaySettings } from "@/modules/settings/settings.types";
 type FormValues = { enabled: boolean; sendHour: string };
 
 const inputClass =
-  "w-32 rounded-control border border-border bg-card px-3 py-2 text-text outline-none transition-colors focus:border-primary";
+  "w-full rounded-control border border-border bg-card px-3 py-2 text-text outline-none transition-colors focus:border-primary sm:w-32";
 const labelClass = "mb-1.5 block text-sm font-medium text-text";
 const errorClass = "mt-1.5 text-sm text-error";
 
@@ -104,7 +104,7 @@ export function BirthdayForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
+          className="min-h-[44px] rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
         >
           {isSubmitting ? "در حال ذخیره…" : "ذخیره تنظیمات تولد"}
         </button>

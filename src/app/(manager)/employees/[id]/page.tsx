@@ -49,9 +49,8 @@ export default async function EmployeeDetailPage({
         </Link>
       </div>
 
-      {/* APPEND_MARKER */}
-      <div className="mb-6 flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-text">{employee.fullName}</h1>
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-bold text-text break-words">{employee.fullName}</h1>
         <span
           className={`rounded-badge px-2.5 py-0.5 text-xs ${
             employee.status ? "bg-success-bg text-success" : "bg-disabled-bg text-disabled"

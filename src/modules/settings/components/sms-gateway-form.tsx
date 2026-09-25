@@ -153,7 +153,7 @@ export function SmsGatewayForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
+            className="min-h-[44px] rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
           >
             {isSubmitting ? "در حال ذخیره…" : "ذخیره سامانه پیامک"}
           </button>
@@ -161,7 +161,7 @@ export function SmsGatewayForm({
             type="button"
             onClick={testConnection}
             disabled={testing}
-            className="rounded-control border border-border px-4 py-2.5 text-sm font-medium text-text transition-colors hover:bg-page disabled:opacity-50"
+            className="min-h-[44px] rounded-control border border-border px-4 py-2.5 text-sm font-medium text-text transition-colors hover:bg-page disabled:opacity-50"
           >
             {testing ? "در حال بررسی…" : "تست اتصال"}
           </button>

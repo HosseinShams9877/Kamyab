@@ -102,7 +102,7 @@ function TemplateEditor({
           type="button"
           onClick={save}
           disabled={busy}
-          className="mt-3 rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
+          className="mt-3 min-h-[44px] rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
         >
           {busy ? "در حال ذخیره…" : "ذخیره قالب"}
         </button>

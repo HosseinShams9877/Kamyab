@@ -31,7 +31,8 @@ export default async function ServicesPage() {
       <h1 className="mb-6 text-2xl font-bold text-text">خدمات</h1>
 
       <div className="mb-8 overflow-hidden rounded-card border border-border bg-card shadow-card">
-        <table className="w-full text-right text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-right text-sm">
           <thead className="bg-page text-text-secondary">
             <tr>
               <th className="px-4 py-3 font-medium">نام</th>
@@ -76,6 +77,7 @@ export default async function ServicesPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {canEdit && (

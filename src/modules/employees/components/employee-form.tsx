@@ -177,7 +177,7 @@ export function EmployeeForm(props: Props) {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
+        className="min-h-[44px] rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
       >
         {isSubmitting ? "در حال ذخیره…" : mode === "create" ? "ایجاد کارمند" : "ذخیره تغییرات"}
       </button>

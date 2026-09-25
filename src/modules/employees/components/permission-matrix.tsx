@@ -104,7 +104,7 @@ export function PermissionMatrix({ employeeId, role, defaults, effective, canEdi
           type="button"
           onClick={save}
           disabled={saving}
-          className="rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
+          className="min-h-[44px] rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
         >
           {saving ? "در حال ذخیره…" : "ذخیرهٔ دسترسی‌ها"}
         </button>

@@ -27,7 +27,7 @@ type Props = {
 const inputClass =
   "rounded-control border border-border bg-card px-3 py-2 text-text outline-none transition-colors focus:border-primary";
 const btn =
-  "rounded-control px-3 py-1.5 text-sm transition-colors disabled:opacity-50";
+  "rounded-control px-3 py-2 text-sm transition-colors disabled:opacity-50 min-h-[44px] sm:min-h-0 sm:py-1.5";
 
 type Draft = {
   daysBefore: string;
@@ -42,6 +42,60 @@ const EMPTY_DRAFT: Draft = {
   recipient: "CASE_OWNER",
   active: true,
 };
+
+// Hoisted to module scope on purpose: defining it inside the component would give
+// React a new component identity on every keystroke, remounting the inputs and
+// dropping focus mid-typing. As a stable module-level component it keeps focus.
+function DraftFields({
+  value,
+  onChange,
+}: {
+  value: Draft;
+  onChange: (d: Draft) => void;
+}) {
+  return (
+    <>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={value.daysBefore}
+        onChange={(e) => onChange({ ...value, daysBefore: e.target.value })}
+        placeholder="روز نسبت به انقضا"
+        className={`${inputClass} w-full sm:w-36`}
+      />
+      <select
+        value={value.channel}
+        onChange={(e) =>
+          onChange({ ...value, channel: e.target.value as ReminderChannel })
+        }
+        className={`${inputClass} w-full sm:w-auto`}
+      >
+        {REMINDER_CHANNEL_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <select
+        value={value.recipient}
+        onChange={(e) =>
+          onChange({ ...value, recipient: e.target.value as ReminderRecipient })
+        }
+        className={`${inputClass} w-full sm:w-auto`}
+      >
+        {REMINDER_RECIPIENT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <label className="flex items-center gap-1.5 whitespace-nowrap text-sm text-text">
+        <input
+          type="checkbox"
+          checked={value.active}
+          onChange={(e) => onChange({ ...value, active: e.target.checked })}
+        />
+        فعال
+      </label>
+    </>
+  );
+}
 
 export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
   const router = useRouter();
@@ -126,57 +180,6 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
     else setRowError({ id, message: data.message ?? "حذف انجام نشد." });
   }
 
-  function DraftFields({
-    value,
-    onChange,
-  }: {
-    value: Draft;
-    onChange: (d: Draft) => void;
-  }) {
-    return (
-      <>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={value.daysBefore}
-          onChange={(e) => onChange({ ...value, daysBefore: e.target.value })}
-          placeholder="روز نسبت به انقضا"
-          className={`${inputClass} w-36`}
-        />
-        <select
-          value={value.channel}
-          onChange={(e) =>
-            onChange({ ...value, channel: e.target.value as ReminderChannel })
-          }
-          className={inputClass}
-        >
-          {REMINDER_CHANNEL_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <select
-          value={value.recipient}
-          onChange={(e) =>
-            onChange({ ...value, recipient: e.target.value as ReminderRecipient })
-          }
-          className={inputClass}
-        >
-          {REMINDER_RECIPIENT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <label className="flex items-center gap-1.5 whitespace-nowrap text-sm text-text">
-          <input
-            type="checkbox"
-            checked={value.active}
-            onChange={(e) => onChange({ ...value, active: e.target.checked })}
-          />
-          فعال
-        </label>
-      </>
-    );
-  }
-
   return (
     <section className="rounded-card border border-border bg-card p-6 shadow-card">
       <h3 className="mb-4 text-base font-bold text-text">قواعد یادآوری</h3>
@@ -243,7 +246,7 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
                       </span>
                     )}
                     {canEdit && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <button
                           type="button"
                           onClick={() => toggleActive(rule)}

@@ -10,7 +10,7 @@ The system is a **modular monolith organized by domain**. Each domain lives in
 guards, components, hooks, helpers, and tests — behind a single public `index.ts`. Anything
 genuinely shared by two or more modules moves up to the shared `src/` layer.
 
-## The 10 rules
+## The 11 rules
 
 1. A component used by only **one** module lives inside that module's `components/` folder.
 2. A component used by **two or more** modules lives in `src/components/`.
@@ -22,6 +22,34 @@ genuinely shared by two or more modules moves up to the shared `src/` layer.
 8. Every module is imported **only** through its `index.ts`. No deep imports.
 9. No module imports from another module's **repository**. Only services.
 10. Shared UI components in `src/components/` must have **no domain logic**.
+11. **Every page and component must be fully responsive.** Mobile-first. No horizontal
+    overflow. Touch targets at least 44px. Tables scroll or stack. Fixed widths must have
+    responsive variants. Test at 320px, 768px, and 1280px.
+
+## Rule 11 — responsiveness, in detail
+
+The UI is Persian/RTL and must be usable on a phone, a tablet, and a desktop with no
+compromises. Concretely:
+
+- **Mobile-first, no horizontal overflow.** Start from the small-screen layout and add
+  `sm:`/`md:`/`lg:`/`xl:` variants upward. At 320px the page must never scroll sideways.
+- **Touch targets ≥ 44px.** Interactive controls are at least 44px tall on touch widths. The
+  shared button class uses `min-h-[44px] sm:min-h-0 sm:py-1.5` — full height on mobile,
+  compact density on desktop for dense admin toolbars. Standalone form submit buttons keep
+  `min-h-[44px]` at all sizes.
+- **Forms stack.** Labels sit above inputs; multi-control rows use `flex flex-wrap` so
+  controls wrap instead of overflowing.
+- **Tables scroll or stack.** Wrap a data table in `<div className="overflow-x-auto">` and
+  give the table a `min-w-[...]` so it scrolls horizontally on narrow screens (the alternative
+  is to stack rows as cards).
+- **Fixed widths get responsive variants.** A fixed width like `w-40` becomes
+  `w-full sm:w-40` so the field fills the row on mobile and takes its natural width on desktop.
+- **Comfortable reading width on desktop.** Pages are centered with `mx-auto max-w-{3xl,4xl,5xl}`
+  and padded with `px-4`.
+- **Correct RTL.** Use logical properties (`ms-*`/`me-*`, `text-right`/`text-left` only where
+  direction-fixed like LTR phone/email fields) so the layout mirrors correctly.
+
+Verify at **320px, 768px, and 1280px** before a phase is considered done.
 
 ## Shared vs. module-specific — the decision table
 
@@ -42,8 +70,6 @@ The one question that places any file: **is it used by one module, or by two or 
 > "Two or more modules" means the *domain* modules under `src/modules/`, not the app router.
 > The `src/app/` layer is a consumer, not a module; it imports everything through module
 > `index.ts` files.
-
-<!-- APPEND_MARKER -->
 
 ## Where each kind of file lives
 

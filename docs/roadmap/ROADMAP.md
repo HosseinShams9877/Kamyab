@@ -11,6 +11,11 @@ types, guards, `components/`, `hooks/`, `lib/`, and `__tests__/` — behind a si
 `index.ts`, with anything shared by two or more modules living in the shared `src/` layer.
 See also the layout in [folder-structure.md](folder-structure.md).
 
+**Every phase must deliver fully responsive pages and components.** See the responsive rule
+(rule 11) in [08-architecture-rules.md](../knowledge/08-architecture-rules.md): mobile-first,
+no horizontal overflow, touch targets at least 44px, tables scroll or stack, fixed widths have
+responsive variants, verified at 320px, 768px, and 1280px with correct RTL.
+
 ## Ordering rationale
 
 The order follows the dependency graph, not the feature list in the document. Three things must exist before any feature is meaningful: the technical foundation, the data model, and access control. Building a feature page before permissions exist means retrofitting security later — exactly the "hiding a button is not access control" mistake ([07-critical-rules.md](../knowledge/07-critical-rules.md), rule 3). So auth and the permission layer come early (phases 3–4), before any CRUD page.
@@ -99,7 +104,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** long.
 
-**Done when:** customers of both types can be created with correct validation, found by every documented search key, and only deleted when they have no case.
+**Done when:** customers of both types can be created with correct validation, found by every documented search key, and only deleted when they have no case. **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ## Phase 9 — Case registration and case page shell (C-4, C-5)
 
@@ -109,7 +114,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** long.
 
-**Done when:** saving once produces a fully-formed case with a copied path and first period atomically, expiry is Jalali-computed and read-only, and a failure in any step rolls back the whole thing.
+**Done when:** saving once produces a fully-formed case with a copied path and first period atomically, expiry is Jalali-computed and read-only, and a failure in any step rolls back the whole thing. **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ## Phase 10 — Path card and stage engine (C-6)
 
@@ -119,7 +124,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** medium.
 
-**Done when:** advancing/rejecting stages behaves exactly as C-6 specifies, progress and current-stage are computed (never stored), and forbidden stage actions are rejected server-side.
+**Done when:** advancing/rejecting stages behaves exactly as C-6 specifies, progress and current-stage are computed (never stored), and forbidden stage actions are rejected server-side. **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ## Phase 11 — Financial card and payments (C-7)
 
@@ -129,7 +134,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** medium.
 
-**Done when:** balance and label are always computed from payments, an empty total shows "—" not zero, overpayment is allowed and labeled, and no computed value is stored.
+**Done when:** balance and label are always computed from payments, an empty total shows "—" not zero, overpayment is allowed and labeled, and no computed value is stored. **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ## Phase 12 — Tasks, follow-ups, archive (C-11)
 
@@ -139,7 +144,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** medium.
 
-**Done when:** recording a result closes the task, writes a follow-up to the timeline, and—when the result's effect is set—updates the period's follow-up status in one transaction, with overdue computed live.
+**Done when:** recording a result closes the task, writes a follow-up to the timeline, and—when the result's effect is set—updates the period's follow-up status in one transaction, with overdue computed live. **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ## Phase 13 — Periods, renewal, renewals page, abandoned tab (C-9, C-10)
 
@@ -149,7 +154,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** long.
 
-**Done when:** a renewal produces a new period with a copied renewal path atomically, the renewals tabs classify periods correctly, and abandonment/restore behave per C-10 (engine-driven abandonment lands in Phase 15).
+**Done when:** a renewal produces a new period with a copied renewal path atomically, the renewals tabs classify periods correctly, and abandonment/restore behave per C-10 (engine-driven abandonment lands in Phase 15). **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ## Phase 14 — Case cancellation and restore (C-8)
 
@@ -159,7 +164,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** medium.
 
-**Done when:** cancelling requires a reason, performs all steps atomically, leaves payments and the record intact, and the per-reason report shows counts over a chosen span.
+**Done when:** cancelling requires a reason, performs all steps atomically, leaves payments and the record intact, and the per-reason report shows counts over a chosen span. **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ## Phase 15 — Automatic engine (C-14)
 
@@ -169,7 +174,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** long.
 
-**Done when:** running the engine sends each due reminder exactly once even across repeated runs, greets each customer once per year, archives/abandons per thresholds, logs every run, and a missed run is fully made up by the next — verified by tests that run the engine twice and assert no duplicates. **Install docs must state the scheduler is mandatory.**
+**Done when:** running the engine sends each due reminder exactly once even across repeated runs, greets each customer once per year, archives/abandons per thresholds, logs every run, and a missed run is fully made up by the next — verified by tests that run the engine twice and assert no duplicates. **Install docs must state the scheduler is mandatory.** **Fully responsive: any UI this phase exposes (e.g. a run-log view) works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout; the runner itself is page-less.**
 
 ## Phase 16 — Dashboard, global search, employee panel, reports
 
@@ -179,7 +184,7 @@ Everything below assumes the mandatory stack in [tech-stack.md](tech-stack.md), 
 
 **Size:** medium.
 
-**Done when:** every dashboard number is computed and links to the matching filtered list, search finds records across entities within the caller's permissions, and the employee panel reuses the manager pages with only an ownership filter.
+**Done when:** every dashboard number is computed and links to the matching filtered list, search finds records across entities within the caller's permissions, and the employee panel reuses the manager pages with only an ownership filter. **Fully responsive: works at 320px, 768px, and 1280px with no horizontal overflow, touch-friendly buttons, and correct RTL layout.**
 
 ---
 

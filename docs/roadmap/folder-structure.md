@@ -40,7 +40,10 @@ Components **inside** the same module use ordinary relative imports for their si
 handlers) always uses the `index.ts` public API — including the module UI, which the barrel
 re-exports for it.
 
-<!-- APPEND_MARKER -->
+> Beyond these ten structural rules, **rule 11 (responsiveness)** in
+> [08-architecture-rules.md](../knowledge/08-architecture-rules.md) applies to every component
+> and page here: mobile-first, no horizontal overflow, ≥44px touch targets, tables that scroll
+> or stack, fixed widths with responsive variants, verified at 320/768/1280px with correct RTL.
 
 ## Top level
 
@@ -139,8 +142,6 @@ src/modules/
 > Modules are created when their phase begins — there are **no empty stub modules** for
 > unbuilt domains. Phases 1–5 delivered `auth`, `permissions`, `settings`, and `employees`.
 
-<!-- APPEND_MARKER_2 -->
-
 ## `src/app` — routing and thin handlers
 
 ```
@@ -205,7 +206,9 @@ src/lib/
   `ui/` (StatusBadge, MoneyText, JalaliDatePicker, …) and global `providers/` (e.g.
   `query-provider`). No fetching, no domain rules; they receive data and callbacks. **Domain**
   components (login/logout, employee forms, the permission matrix) are **not** here — they live
-  in their module's `components/` (rule 1).
+  in their module's `components/` (rule 1). Every shared and module component is **responsive**
+  (rule 11): built mobile-first with `sm:`/`md:`/`lg:` variants, no fixed width without a
+  responsive fallback, and touch-friendly controls.
 
 ## Why this shape
 

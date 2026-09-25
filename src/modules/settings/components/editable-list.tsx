@@ -26,7 +26,7 @@ type Props = {
 const inputClass =
   "w-full rounded-control border border-border bg-card px-3 py-2 text-text outline-none transition-colors focus:border-primary";
 const btn =
-  "rounded-control px-3 py-1.5 text-sm transition-colors disabled:opacity-50";
+  "rounded-control px-3 py-2 text-sm transition-colors disabled:opacity-50 min-h-[44px] sm:min-h-0 sm:py-1.5";
 
 export function EditableList({
   kind,
@@ -141,7 +141,7 @@ export function EditableList({
               <select
                 value={newEffect}
                 onChange={(e) => setNewEffect(e.target.value as RenewalEffect)}
-                className={`${inputClass} w-44`}
+                className={`${inputClass} w-full sm:w-44`}
               >
                 {RENEWAL_EFFECT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -186,7 +186,7 @@ export function EditableList({
                         onChange={(e) =>
                           setEditEffect(e.target.value as RenewalEffect)
                         }
-                        className={`${inputClass} w-44`}
+                        className={`${inputClass} w-full sm:w-44`}
                       >
                         {RENEWAL_EFFECT_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>
@@ -231,7 +231,7 @@ export function EditableList({
                       </span>
                     )}
                     {canEdit && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <button
                           type="button"
                           title="بالا"

@@ -63,7 +63,7 @@ export function SetPasswordForm({ employeeId }: { employeeId: string }) {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
+        className="min-h-[44px] rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
       >
         {isSubmitting ? "در حال ثبت…" : "تغییر رمز عبور"}
       </button>

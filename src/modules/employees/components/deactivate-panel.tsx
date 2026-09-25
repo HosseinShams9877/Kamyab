@@ -96,7 +96,7 @@ export function DeactivatePanel({ employeeId, isSelf, candidates }: Props) {
             type="button"
             disabled={busy || !successorId}
             onClick={() => attempt(successorId)}
-            className="rounded-control bg-error px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:bg-disabled-bg disabled:text-disabled"
+            className="min-h-[44px] rounded-control bg-error px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:bg-disabled-bg disabled:text-disabled"
           >
             {busy ? "در حال انتقال…" : "انتقال کار و غیرفعال‌سازی"}
           </button>
@@ -108,7 +108,7 @@ export function DeactivatePanel({ employeeId, isSelf, candidates }: Props) {
           type="button"
           disabled={busy}
           onClick={() => attempt(null)}
-          className="rounded-control bg-error px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:bg-disabled-bg disabled:text-disabled"
+          className="min-h-[44px] rounded-control bg-error px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:bg-disabled-bg disabled:text-disabled"
         >
           {busy ? "در حال بررسی…" : "غیرفعال‌سازی کارمند"}
         </button>

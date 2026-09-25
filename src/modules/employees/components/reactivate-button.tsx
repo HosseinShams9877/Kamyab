@@ -33,7 +33,7 @@ export function ReactivateButton({ employeeId }: { employeeId: string }) {
         type="button"
         disabled={busy}
         onClick={reactivate}
-        className="rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
+        className="min-h-[44px] rounded-control bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:bg-disabled-bg disabled:text-disabled"
       >
         {busy ? "در حال فعال‌سازی…" : "فعال‌سازی مجدد"}
       </button>
