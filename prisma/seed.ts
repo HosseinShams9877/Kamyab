@@ -56,12 +56,13 @@ const settings: Record<string, unknown> = {
   institute_name: "موسسه حقوقی ثبت کامیاب",
   institute_phone: "",
   institute_address: "",
+  institute_email: "",
   timezone: "Asia/Tehran",
   threshold_archive_days: 7,
   threshold_abandonment_days: 30,
   threshold_stale_days: 10,
-  birthday_greeting_enabled: true,
-  birthday_send_hour: 9,
+  birthday_greeting_enabled: false, // B-9: master switch defaults OFF
+  birthday_send_hour: 10, // B-9: default send hour
   sms_provider: "",
   sms_api_key: "", // secret; never echoed back to the client after saving (B-10)
   sms_sender_number: "",
