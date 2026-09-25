@@ -1,20 +1,16 @@
 import { redirect } from "next/navigation";
-import { requireUser, LogoutButton } from "@/modules/auth";
+import { requireUser } from "@/modules/auth";
 
-// Management dashboard landing (C-2). Built out in Phase 16; for Phase 3 it is a
-// minimal protected page that proves the session guard and role routing. The
-// real permission layer arrives in Phase 4 — here we only route an employee who
-// lands here directly to their own panel.
+// Management dashboard landing (C-2). Built out in Phase 16; for now it is a
+// minimal protected page that proves the session guard and role routing.
+// Navigation and logout live in the shared manager layout (the app shell).
 export default async function DashboardPage() {
   const user = await requireUser();
   if (user.role === "EMPLOYEE") redirect("/employee");
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-text">داشبورد مدیریت</h1>
-        <LogoutButton />
-      </div>
+      <h1 className="mb-6 text-2xl font-bold text-text">داشبورد مدیریت</h1>
       <div className="rounded-card border border-border bg-card p-6 shadow-card">
         <p className="text-text">
           خوش آمدید، <span className="font-bold">{user.fullName}</span>.
