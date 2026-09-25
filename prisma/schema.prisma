@@ -161,6 +161,7 @@ model ServiceDuration {
   title      String // free text ("1 year")
   monthCount Int // 1-120; expiry uses Jalali month-add (rule 10)
   isDefault  Boolean @default(false) // at most one true per service
+  active     Boolean @default(true) // a used duration cannot be deleted, only deactivated
 
   @@unique([serviceId, title])
   @@index([serviceId])

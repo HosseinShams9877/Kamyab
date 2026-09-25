@@ -104,6 +104,16 @@ export function DurationsEditor({ serviceId, durations, canEdit }: Props) {
     else setRowError({ id, message: data.message ?? "حذف انجام نشد." });
   }
 
+  async function toggleActive(id: string, active: boolean) {
+    if (busy) return;
+    setBusy(true);
+    setRowError(null);
+    const data = await call(`${base}/${id}/status`, "POST", { active: !active });
+    setBusy(false);
+    if (data.ok) router.refresh();
+    else setRowError({ id, message: data.message ?? "تغییر وضعیت انجام نشد." });
+  }
+
   return (
     <section className="rounded-card border border-border bg-card p-6 shadow-card">
       <h3 className="mb-4 text-base font-bold text-text">مدت‌های اعتبار</h3>
@@ -155,7 +165,7 @@ export function DurationsEditor({ serviceId, durations, canEdit }: Props) {
         ) : (
           <ul className="divide-y divide-border rounded-control border border-border">
             {durations.map((d) => (
-              <li key={d.id} className="px-3 py-2.5">
+              <li key={d.id} className={`px-3 py-2.5 ${d.active ? "" : "opacity-60"}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   {editingId === d.id ? (
                     <>
@@ -214,6 +224,11 @@ export function DurationsEditor({ serviceId, durations, canEdit }: Props) {
                           در حال استفاده
                         </span>
                       )}
+                      {!d.active && (
+                        <span className="rounded-badge bg-disabled-bg px-2 py-0.5 text-xs text-disabled">
+                          غیرفعال
+                        </span>
+                      )}
                       {canEdit && (
                         <div className="flex flex-wrap items-center gap-1">
                           <button
@@ -228,6 +243,14 @@ export function DurationsEditor({ serviceId, durations, canEdit }: Props) {
                             className={`${btn} text-primary hover:bg-page`}
                           >
                             ویرایش
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleActive(d.id, d.active)}
+                            disabled={busy}
+                            className={`${btn} text-text-secondary hover:bg-page`}
+                          >
+                            {d.active ? "غیرفعال کردن" : "فعال کردن"}
                           </button>
                           <button
                             type="button"

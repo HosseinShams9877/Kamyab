@@ -70,3 +70,7 @@ export const durationUpdateSchema = z.object({
   isDefault: z.boolean().default(false),
 });
 export type DurationUpdateInput = z.infer<typeof durationUpdateSchema>;
+
+/** Activate / deactivate a duration (B-3). Always allowed, even when in use. */
+export const durationSetActiveSchema = z.object({ active: z.boolean() });
+export type DurationSetActiveInput = z.infer<typeof durationSetActiveSchema>;

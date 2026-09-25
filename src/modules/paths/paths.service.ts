@@ -154,6 +154,23 @@ export async function deleteDuration(
   await repo.deleteDuration(durationId);
 }
 
+/**
+ * Activate / deactivate a duration (B-3). Always permitted — including for a
+ * duration already used by cases: unlike editing month count or the default
+ * flag, deactivation is non-destructive (it only removes the duration from the
+ * case-registration pick list; history is untouched).
+ */
+export async function setDurationActive(
+  serviceId: string,
+  durationId: string,
+  active: boolean,
+): Promise<void> {
+  if (!(await repo.durationBelongsToService(durationId, serviceId))) {
+    throw new PathRuleError(DURATION_NOT_FOUND);
+  }
+  await repo.setDurationActive(durationId, active);
+}
+
 // --- Cross-module lifetime hook ---------------------------------------------
 
 /**

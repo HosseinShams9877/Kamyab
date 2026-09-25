@@ -12,6 +12,7 @@ import {
   addDuration,
   updateDuration,
   deleteDuration,
+  setDurationActive,
   PathRuleError,
 } from "../paths.service";
 
@@ -91,7 +92,7 @@ describe("addDuration", () => {
 describe("updateDuration", () => {
   beforeEach(() => {
     r.durationBelongsToService.mockResolvedValue(true);
-    r.findDuration.mockResolvedValue({ id: "d1", monthCount: 12, isDefault: true });
+    r.findDuration.mockResolvedValue({ id: "d1", monthCount: 12, isDefault: true, active: true });
   });
 
   it("allows a title-only edit of a used duration", async () => {
@@ -143,5 +144,37 @@ describe("deleteDuration", () => {
     r.deleteDuration.mockResolvedValue(undefined);
     await deleteDuration("s1", "d1");
     expect(r.deleteDuration).toHaveBeenCalledWith("d1");
+  });
+});
+
+describe("setDurationActive", () => {
+  it("rejects a duration that does not belong to the service", async () => {
+    r.durationBelongsToService.mockResolvedValue(false);
+    const err = await setDurationActive("s1", "d-x", false).catch((e) => e);
+    expect(err).toBeInstanceOf(PathRuleError);
+    expect(r.setDurationActive).not.toHaveBeenCalled();
+  });
+
+  it("deactivates an unused duration", async () => {
+    r.durationBelongsToService.mockResolvedValue(true);
+    r.setDurationActive.mockResolvedValue(undefined);
+    await setDurationActive("s1", "d1", false);
+    expect(r.setDurationActive).toHaveBeenCalledWith("d1", false);
+  });
+
+  it("deactivates a USED duration (allowed, unlike delete or a month-count edit)", async () => {
+    r.durationBelongsToService.mockResolvedValue(true);
+    // No usage check gates this: deactivation is non-destructive.
+    r.setDurationActive.mockResolvedValue(undefined);
+    await setDurationActive("s1", "d1", false);
+    expect(r.setDurationActive).toHaveBeenCalledWith("d1", false);
+    expect(r.countDurationUsage).not.toHaveBeenCalled();
+  });
+
+  it("reactivates a duration", async () => {
+    r.durationBelongsToService.mockResolvedValue(true);
+    r.setDurationActive.mockResolvedValue(undefined);
+    await setDurationActive("s1", "d1", true);
+    expect(r.setDurationActive).toHaveBeenCalledWith("d1", true);
   });
 });

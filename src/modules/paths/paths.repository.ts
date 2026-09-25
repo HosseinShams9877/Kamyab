@@ -120,8 +120,8 @@ export async function stageBelongsToService(
 export async function listDurations(serviceId: string): Promise<DurationRow[]> {
   const rows = await prisma.serviceDuration.findMany({
     where: { serviceId },
-    orderBy: { monthCount: "asc" },
-    select: { id: true, title: true, monthCount: true, isDefault: true },
+    orderBy: [{ active: "desc" }, { monthCount: "asc" }],
+    select: { id: true, title: true, monthCount: true, isDefault: true, active: true },
   });
   const usages = await Promise.all(rows.map((r) => countDurationUsage(r.id)));
   return rows.map((r, i) => ({
@@ -129,16 +129,17 @@ export async function listDurations(serviceId: string): Promise<DurationRow[]> {
     title: r.title,
     monthCount: r.monthCount,
     isDefault: r.isDefault,
+    active: r.active,
     inUse: usages[i] > 0,
   }));
 }
 
 export function findDuration(
   id: string,
-): Promise<{ id: string; monthCount: number; isDefault: boolean } | null> {
+): Promise<{ id: string; monthCount: number; isDefault: boolean; active: boolean } | null> {
   return prisma.serviceDuration.findUnique({
     where: { id },
-    select: { id: true, monthCount: true, isDefault: true },
+    select: { id: true, monthCount: true, isDefault: true, active: true },
   });
 }
 
@@ -194,6 +195,15 @@ export async function updateDuration(
 
 export async function deleteDuration(id: string): Promise<void> {
   await prisma.serviceDuration.delete({ where: { id } });
+}
+
+/**
+ * Activate / deactivate a duration (B-3). Deactivation is always allowed (even
+ * for a used duration): it only hides the duration from case registration, the
+ * row and its history stay intact. monthCount and isDefault are untouched.
+ */
+export async function setDurationActive(id: string, active: boolean): Promise<void> {
+  await prisma.serviceDuration.update({ where: { id }, data: { active } });
 }
 
 /** Confirm a duration belongs to the given service (route-level guard). */

@@ -26,4 +26,6 @@ export type DurationRow = {
   isDefault: boolean;
   /** True when at least one case/period already uses it — delete is then blocked. */
   inUse: boolean;
+  /** Inactive durations are hidden from case registration but kept for history (B-3). */
+  active: boolean;
 };

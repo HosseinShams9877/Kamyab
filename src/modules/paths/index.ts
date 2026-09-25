@@ -15,6 +15,7 @@ export {
   addDuration,
   updateDuration,
   deleteDuration,
+  setDurationActive,
   clearServiceDefinition,
   PathRuleError,
 } from "./paths.service";
@@ -26,6 +27,7 @@ export {
   stageMoveSchema,
   durationCreateSchema,
   durationUpdateSchema,
+  durationSetActiveSchema,
 } from "./paths.schema";
 export type {
   StageCreateInput,
@@ -33,6 +35,7 @@ export type {
   StageMoveInput,
   DurationCreateInput,
   DurationUpdateInput,
+  DurationSetActiveInput,
 } from "./paths.schema";
 
 // --- Types ------------------------------------------------------------------
