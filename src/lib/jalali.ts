@@ -5,7 +5,7 @@ import {
   isLeapJalaaliYear,
   isValidJalaaliDate,
 } from "jalaali-js";
-import { toPersianDigits } from "./digits";
+import { toPersianDigits, toEnglishDigits } from "./digits";
 
 // Jalali (Shamsi) calendar helpers.
 //
@@ -77,6 +77,32 @@ export function addYears(j: JalaliDate, years: number): JalaliDate {
 /** Today's date in the Jalali calendar (local time). */
 export function todayJalali(): JalaliDate {
   return toJalali(new Date());
+}
+
+/**
+ * Parse a Jalali date written as "YYYY/MM/DD" (Persian or ASCII digits, single-
+ * or double-padded month/day) into its parts, or null when the string is not a
+ * well-formed, valid Jalali date. Whitespace is trimmed and digits normalized.
+ */
+export function parseJalali(input: string): JalaliDate | null {
+  const s = toEnglishDigits(input).trim();
+  const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(s);
+  if (!m) return null;
+  const j: JalaliDate = { jy: Number(m[1]), jm: Number(m[2]), jd: Number(m[3]) };
+  return isValid(j) ? j : null;
+}
+
+/**
+ * Compare two Jalali dates by (year, month, day). Returns a negative number when
+ * `a` is earlier than `b`, zero when equal, a positive number when later.
+ */
+export function compareJalali(a: JalaliDate, b: JalaliDate): number {
+  return a.jy - b.jy || a.jm - b.jm || a.jd - b.jd;
+}
+
+/** Whether a Jalali date is strictly after today (used for "not in the future"). */
+export function isFutureJalali(j: JalaliDate): boolean {
+  return compareJalali(j, todayJalali()) > 0;
 }
 
 /**
