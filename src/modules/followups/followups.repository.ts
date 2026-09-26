@@ -54,3 +54,26 @@ export function findFollowUpsByCase(caseId: string): Promise<FollowUpRecord[]> {
     select: FOLLOWUP_SELECT,
   });
 }
+
+// Joined shape for the "last follow-up" line on a period card (C-9): who + when
+// + note, keyed by the period the follow-up was recorded against.
+const PERIOD_FOLLOWUP_SELECT = {
+  periodId: true,
+  note: true,
+  createdAt: true,
+  createdBy: { select: { fullName: true } },
+} satisfies Prisma.FollowUpSelect;
+
+export type PeriodFollowUpRecord = Prisma.FollowUpGetPayload<{
+  select: typeof PERIOD_FOLLOWUP_SELECT;
+}>;
+
+/** A case's period-scoped follow-ups (periodId set), newest first — the service
+ *  keeps the first per period for the "last follow-up" card line (C-9). */
+export function findFollowUpsWithPeriod(caseId: string): Promise<PeriodFollowUpRecord[]> {
+  return prisma.followUp.findMany({
+    where: { caseId, periodId: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: PERIOD_FOLLOWUP_SELECT,
+  });
+}

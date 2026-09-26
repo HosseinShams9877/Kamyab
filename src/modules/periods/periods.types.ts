@@ -95,3 +95,75 @@ export type MoveStageArgs = {
   stageId: string;
   direction: "up" | "down";
 };
+
+// --- Renewal (C-9) + renewals page (C-10) -----------------------------------
+
+/** The data needed to renew a case inside the save transaction (C-9): close the
+ *  previous period and create the next one with copied renewal-path stages. */
+export type RenewPeriodInput = {
+  previousPeriodId: string;
+  caseId: string;
+  indexNumber: number; // previous indexNumber + 1
+  startDate: Date;
+  expiryDate: Date | null;
+  totalAmount: bigint | null;
+  stages: StageTemplate[];
+};
+
+/** The active period the renewal continues from (C-9): its index (→ next
+ *  number), its expiry (→ the new period's default start), and its follow-up
+ *  status. Dates are Jalali "YYYY/MM/DD" strings. */
+export type RenewablePeriod = {
+  id: string;
+  indexNumber: number;
+  expiryDate: string | null;
+  followUpStatus: FollowUpStatus;
+};
+
+/** A period's lifecycle facts, for authorizing/validating a manual abandon or
+ *  restore (C-10). daysRemaining is computed at read time (rule 2). */
+export type PeriodLifecycle = {
+  caseId: string;
+  status: PeriodStatus;
+  followUpStatus: FollowUpStatus;
+  daysRemaining: number | null;
+  indexNumber: number;
+};
+
+/** One row of the renewals work-queue (C-10). daysRemaining + the financial
+ *  figures + the abandon-eligibility flag are computed at read time (rule 2). */
+export type RenewalRow = {
+  periodId: string;
+  caseId: string;
+  caseNumber: string;
+  customerName: string;
+  serviceName: string;
+  ownerName: string;
+  ownerId: string;
+  indexNumber: number;
+  expiryDate: string | null; // Jalali YYYY/MM/DD
+  daysRemaining: number | null;
+  followUpStatus: FollowUpStatus;
+  status: PeriodStatus;
+  totalAmount: number | null;
+  balance: number | null;
+  /** Whether this (active, expired) period currently meets the abandonment rule. */
+  abandonable: boolean;
+};
+
+/** The most recent follow-up recorded against a period, for the "last follow-up"
+ *  line on a period card (C-9). Composed by the case page from the followups seam. */
+export type PeriodCardFollowUp = {
+  name: string; // who recorded it
+  date: string; // Jalali YYYY/MM/DD
+  note: string | null;
+};
+
+/** Live meta for the renewal form (C-9): whether the case's service is renewable,
+ *  its active validity durations, and the default start date (the current period's
+ *  expiry — the new span begins where the old one ends). */
+export type RenewalMeta = {
+  renewable: boolean;
+  durations: { id: string; title: string; monthCount: number; isDefault: boolean }[];
+  defaultStartDate: string | null; // Jalali YYYY/MM/DD
+};

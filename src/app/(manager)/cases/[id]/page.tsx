@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/modules/auth";
 import { can } from "@/modules/permissions";
-import { getCasePage, CaseTabs, CASE_STATUS_LABELS, CASE_STATUS_BADGE, canEditStages, canAddStages } from "@/modules/cases";
-import { periodPathTitle } from "@/modules/periods";
+import { getCasePage, CaseTabs, CASE_STATUS_LABELS, CASE_STATUS_BADGE, canEditStages, canAddStages, canRegisterRenewal, canRecordRenewalFollowUp, getRenewalMeta } from "@/modules/cases";
+import { periodPathTitle, PeriodsPanel } from "@/modules/periods";
 import {
   getCaseFinancial,
   canViewFinancial,
@@ -17,7 +17,7 @@ import {
 } from "@/modules/payments";
 import { toPersianDigits } from "@/lib/digits";
 import { formatToman } from "@/lib/money";
-import { listCaseFollowUps, FollowUpTimeline } from "@/modules/followups";
+import { listCaseFollowUps, listLatestFollowUpByPeriod, FollowUpTimeline } from "@/modules/followups";
 
 // A single case's page (C-5). Phase 9 read-only shell: a live header (computed
 // days-remaining + path progress, never stored — rule 2), a Path card and a
@@ -90,6 +90,29 @@ export default async function CaseDetailPage({
   // followups barrel). The tasks themselves are managed on the /tasks page.
   const followUps = await listCaseFollowUps(header.id);
   const tasksPanel = <FollowUpTimeline followUps={followUps} />;
+
+  // The Periods tab body (C-9): one card per validity span with the renewal +
+  // renewal-follow-up forms on the active period. Composed on the server so the
+  // client CaseTabs never imports the periods barrel. The renewal meta drives the
+  // form (renewable flag, durations, default start); the latest-follow-up map feeds
+  // each card's "last follow-up" line. The two capability flags are record-scoped
+  // (rule 3); the API routes re-check every request.
+  const canRenew = canRegisterRenewal(user, header.ownerId);
+  const canRecordRenewalFu = canRecordRenewalFollowUp(user, header.ownerId);
+  const [renewalMeta, latestFollowUps] = await Promise.all([
+    getRenewalMeta(header.id),
+    listLatestFollowUpByPeriod(header.id),
+  ]);
+  const periodsPanel = (
+    <PeriodsPanel
+      caseId={header.id}
+      periods={periods}
+      renewalMeta={renewalMeta}
+      latestFollowUps={latestFollowUps}
+      canRenew={canRenew}
+      canRecordFollowUp={canRecordRenewalFu}
+    />
+  );
 
   const daysText =
     header.daysRemaining === null
@@ -225,10 +248,10 @@ export default async function CaseDetailPage({
 
       <CaseTabs
         current={current}
-        periods={periods}
         canEdit={canEdit}
         canAddStage={canAddStage}
         isCancelled={isCancelled}
+        periodsPanel={periodsPanel}
         paymentsPanel={paymentsPanel}
         tasksPanel={tasksPanel}
       />

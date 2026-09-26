@@ -7,6 +7,7 @@
 export {
   listActiveResults,
   listCaseFollowUps,
+  listLatestFollowUpByPeriod,
   recordResult,
 } from "./followups.service";
 export type { FollowUpActionResult } from "./followups.service";
@@ -16,7 +17,7 @@ export { recordResultSchema } from "./followups.schema";
 export type { RecordResultInput } from "./followups.schema";
 
 // --- Types (isomorphic) -----------------------------------------------------
-export type { FollowUpResultOption, FollowUpRow } from "./followups.types";
+export type { FollowUpResultOption, FollowUpRow, LatestPeriodFollowUp } from "./followups.types";
 
 // --- Guards (isomorphic: error + Persian messages + effect→period mapping) --
 export { FollowUpRuleError, periodEffect } from "./followups.guards";

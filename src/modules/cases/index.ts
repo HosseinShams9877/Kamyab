@@ -19,6 +19,14 @@ export {
   getCaseOwnership,
   runCaseMutation,
   listActiveCaseOptions,
+  getRenewalMeta,
+  registerRenewal,
+  recordRenewalFollowUp,
+  abandonPeriod,
+  restorePeriod,
+  canRegisterRenewal,
+  canRecordRenewalFollowUp,
+  canRestore,
 } from "./cases.service";
 export type { CasePage, CaseMutationArgs } from "./cases.service";
 

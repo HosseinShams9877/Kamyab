@@ -22,3 +22,11 @@ export type FollowUpRow = {
   createdByName: string;
   createdAt: string; // Jalali YYYY/MM/DD
 };
+
+/** The most recent follow-up recorded against a period, for the "last follow-up"
+ *  line on a period card (C-9). Keyed by periodId in the case page. */
+export type LatestPeriodFollowUp = {
+  name: string; // who recorded it
+  date: string; // Jalali YYYY/MM/DD
+  note: string | null;
+};

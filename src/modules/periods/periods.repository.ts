@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type {
   RegistrationPeriodInput,
+  RenewPeriodInput,
   ApplyStageActionArgs,
   AddExceptionalStageArgs,
   MoveStageArgs,
@@ -56,6 +57,159 @@ export async function createRegistrationPeriodTx(
   }
 
   return period;
+}
+
+// --- Renewal (C-9) ----------------------------------------------------------
+
+/**
+ * Renew a case on the caller's transaction (rule 4): close the previous period
+ * (→ RENEWED) and create the next one (ACTIVE, indexNumber = previous + 1) with
+ * the copied renewal-path stages, the first IN_PROGRESS (with startedAt) and the
+ * rest PENDING. The reminder cycle is fresh automatically — SentReminder is keyed
+ * by periodId, so the new period starts with no sent rows. Case expiry is never
+ * stored; it recomputes from the new active period (rule 2).
+ */
+export async function renewPeriodTx(
+  tx: Prisma.TransactionClient,
+  input: RenewPeriodInput,
+): Promise<{ id: string }> {
+  await tx.period.update({
+    where: { id: input.previousPeriodId },
+    data: { status: "RENEWED" },
+  });
+
+  const period = await tx.period.create({
+    data: {
+      caseId: input.caseId,
+      indexNumber: input.indexNumber,
+      status: "ACTIVE",
+      startDate: input.startDate,
+      expiryDate: input.expiryDate,
+      totalAmount: input.totalAmount,
+      followUpStatus: "NOT_FOLLOWED_UP",
+    },
+    select: { id: true },
+  });
+
+  if (input.stages.length > 0) {
+    const now = new Date();
+    await tx.caseStage.createMany({
+      data: input.stages
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((s, i) => ({
+          periodId: period.id,
+          title: s.title,
+          order: s.order,
+          status: i === 0 ? "IN_PROGRESS" : "PENDING",
+          startedAt: i === 0 ? now : null,
+          attemptCount: 0,
+          isExceptional: false,
+        })),
+    });
+  }
+
+  return period;
+}
+
+/** Set a period's lifecycle status (abandon → ABANDONED, restore → ACTIVE) on the
+ *  caller's transaction (rule 4). C-10 manual controls; the engine reuses it in
+ *  Phase 15. */
+export async function setPeriodStatusTx(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+  status: string,
+): Promise<void> {
+  await tx.period.update({ where: { id: periodId }, data: { status } });
+}
+
+/** The case's active period, for a renewal: its index (→ next number), expiry
+ *  (→ the new span's default start) and follow-up status. Null when the case has
+ *  no active period. */
+export async function findRenewablePeriod(caseId: string): Promise<{
+  id: string;
+  indexNumber: number;
+  expiryDate: Date | null;
+  followUpStatus: string;
+} | null> {
+  return prisma.period.findFirst({
+    where: { caseId, status: "ACTIVE" },
+    orderBy: { indexNumber: "desc" },
+    select: { id: true, indexNumber: true, expiryDate: true, followUpStatus: true },
+  });
+}
+
+/** A period's lifecycle facts (its owning case, status, follow-up status, expiry
+ *  and index), for authorizing/validating a manual abandon or restore (C-10). The
+ *  expiry is returned raw; days-remaining is computed in the service (rule 2). */
+export async function findPeriodLifecycle(periodId: string): Promise<{
+  caseId: string;
+  status: string;
+  followUpStatus: string;
+  expiryDate: Date | null;
+  indexNumber: number;
+} | null> {
+  return prisma.period.findUnique({
+    where: { id: periodId },
+    select: {
+      caseId: true,
+      status: true,
+      followUpStatus: true,
+      expiryDate: true,
+      indexNumber: true,
+    },
+  });
+}
+
+/** The renewals work-queue (C-10): every ACTIVE or ABANDONED period of a
+ *  non-cancelled case, with the joined display names + the payment amounts the
+ *  balance is computed from (rule 2). The service classifies each row into a tab
+ *  and computes days-remaining + the abandon-eligibility flag. */
+export type RenewalQueueRow = {
+  id: string;
+  indexNumber: number;
+  status: string;
+  expiryDate: Date | null;
+  totalAmount: bigint | null;
+  followUpStatus: string;
+  payments: { amount: bigint }[];
+  case: {
+    id: string;
+    number: string;
+    ownerId: string;
+    owner: { fullName: string };
+    service: { name: string };
+    customer: { type: string; fullName: string | null; companyName: string | null };
+  };
+};
+
+export async function findRenewalsQueue(): Promise<RenewalQueueRow[]> {
+  return prisma.period.findMany({
+    where: {
+      status: { in: ["ACTIVE", "ABANDONED"] },
+      case: { status: { not: "CANCELLED" } },
+    },
+    orderBy: { expiryDate: "asc" },
+    select: {
+      id: true,
+      indexNumber: true,
+      status: true,
+      expiryDate: true,
+      totalAmount: true,
+      followUpStatus: true,
+      payments: { select: { amount: true } },
+      case: {
+        select: {
+          id: true,
+          number: true,
+          ownerId: true,
+          owner: { select: { fullName: true } },
+          service: { select: { name: true } },
+          customer: { select: { type: true, fullName: true, companyName: true } },
+        },
+      },
+    },
+  });
 }
 
 // --- Reads (case page shell, C-5) ------------------------------------------

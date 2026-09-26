@@ -20,7 +20,7 @@ import {
   TASK_NEEDS_CASE,
 } from "./followups.guards";
 import type { RecordResultInput } from "./followups.schema";
-import type { FollowUpResultOption, FollowUpRow } from "./followups.types";
+import type { FollowUpResultOption, FollowUpRow, LatestPeriodFollowUp } from "./followups.types";
 
 // Business logic for the followups domain (C-11 record-result + B-6). The service
 // orchestrates the record-result transaction across four modules (rule 9): the
@@ -67,6 +67,25 @@ export async function listCaseFollowUps(caseId: string): Promise<FollowUpRow[]> 
     createdByName: r.createdBy.fullName,
     createdAt: dateToJalali(r.createdAt),
   }));
+}
+
+/** The most recent follow-up per period of a case (C-9), for the "last follow-up"
+ *  line on each period card. Rows come back newest-first, so the first one seen
+ *  for a period is its latest. */
+export async function listLatestFollowUpByPeriod(
+  caseId: string,
+): Promise<Record<string, LatestPeriodFollowUp>> {
+  const rows = await repo.findFollowUpsWithPeriod(caseId);
+  const latest: Record<string, LatestPeriodFollowUp> = {};
+  for (const r of rows) {
+    if (!r.periodId || latest[r.periodId]) continue;
+    latest[r.periodId] = {
+      name: r.createdBy.fullName,
+      date: dateToJalali(r.createdAt),
+      note: r.note,
+    };
+  }
+  return latest;
 }
 
 // APPEND_RECORD

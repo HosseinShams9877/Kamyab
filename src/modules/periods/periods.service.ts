@@ -1,11 +1,17 @@
 import type { Prisma } from "@prisma/client";
 import { toJalali, formatJalali } from "@/lib/jalali";
 import type { PeriodStatus, FollowUpStatus, StageStatus } from "@/types/enums";
+import { getThresholds } from "@/modules/settings";
 import * as repo from "./periods.repository";
+import { isAbandonable, inRenewalTab, type RenewalTab } from "./periods.guards";
 import type {
   PeriodRow,
   StageRow,
   RegistrationPeriodInput,
+  RenewPeriodInput,
+  RenewablePeriod,
+  PeriodLifecycle,
+  RenewalRow,
   StageActionContext,
   ApplyStageActionArgs,
   AddExceptionalStageArgs,
@@ -24,6 +30,31 @@ const PASSED_STAGE_STATUSES = ["DONE", "NOT_NEEDED"];
 function dateToJalali(date: Date | null): string | null {
   if (!date) return null;
   return formatJalali(toJalali(date), { persianDigits: false });
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whole days from today until a stored expiry Date: positive when ahead, negative
+ * once passed, null with no expiry. Computed at read time (rule 2). Kept inside
+ * the periods module (from the raw Date) so periods never imports cases.guards —
+ * that would make the module DAG cyclic (cases → periods). `now` is injectable so
+ * the count is deterministic in tests.
+ */
+function daysRemainingFromDate(expiry: Date | null, now: Date = new Date()): number | null {
+  if (!expiry) return null;
+  const e = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((e.getTime() - today.getTime()) / DAY_MS);
+}
+
+/** The customer's display name from the type-dependent columns (renewals queue). */
+function customerDisplayName(c: {
+  type: string;
+  fullName: string | null;
+  companyName: string | null;
+}): string {
+  return c.type === "LEGAL" ? c.companyName ?? "—" : c.fullName ?? "—";
 }
 
 function mapStage(s: repo.PeriodWithDetail["stages"][number]): StageRow {
@@ -190,4 +221,108 @@ export function setPeriodFollowUpTx(
   data: { followUpStatus: string; status?: string },
 ): Promise<void> {
   return repo.setPeriodFollowUpTx(tx, periodId, data);
+}
+
+// --- Renewal + renewals page seams (C-9 / C-10) -----------------------------
+// The cases module orchestrates a renewal / abandon / restore inside its own
+// save transaction (rule 4) but never touches the Period/CaseStage tables
+// directly (rule 9) — it goes through these. The renewals-page view is read
+// here (a Period query that joins the case's display names — a relation read
+// within the periods-owned query, not a cross-module repository call).
+
+/** The case's active period, for the renewal form: its index, expiry (→ default
+ *  start) and follow-up status. Null when the case has no active period. */
+export async function getRenewablePeriod(caseId: string): Promise<RenewablePeriod | null> {
+  const r = await repo.findRenewablePeriod(caseId);
+  if (!r) return null;
+  return {
+    id: r.id,
+    indexNumber: r.indexNumber,
+    expiryDate: dateToJalali(r.expiryDate),
+    followUpStatus: r.followUpStatus as FollowUpStatus,
+  };
+}
+
+/** A period's lifecycle facts for a manual abandon/restore (C-10). daysRemaining
+ *  is computed here from the raw expiry (rule 2). Null when the period is absent. */
+export async function getPeriodLifecycle(periodId: string): Promise<PeriodLifecycle | null> {
+  const r = await repo.findPeriodLifecycle(periodId);
+  if (!r) return null;
+  return {
+    caseId: r.caseId,
+    status: r.status as PeriodStatus,
+    followUpStatus: r.followUpStatus as FollowUpStatus,
+    daysRemaining: daysRemainingFromDate(r.expiryDate),
+    indexNumber: r.indexNumber,
+  };
+}
+
+/** Renew a case on the caller's transaction (close previous → RENEWED, create the
+ *  next ACTIVE period + copied renewal stages). Re-exported as the cross-module
+ *  seam the cases module runs inside its save transaction (rule 4). */
+export function renewPeriodTx(
+  tx: Prisma.TransactionClient,
+  input: RenewPeriodInput,
+): Promise<{ id: string }> {
+  return repo.renewPeriodTx(tx, input);
+}
+
+/** Set a period's lifecycle status (abandon/restore, C-10) on the caller's
+ *  transaction (rule 4). */
+export function setPeriodStatusTx(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+  status: string,
+): Promise<void> {
+  return repo.setPeriodStatusTx(tx, periodId, status);
+}
+
+/**
+ * The renewals work-queue for one tab (C-10). Reads every ACTIVE/ABANDONED period
+ * of a non-cancelled case, computes days-remaining, the financial figures and the
+ * abandon-eligibility flag at read time (rule 2 — the threshold comes from
+ * settings), then keeps only the rows the tab classifies in (guards.inRenewalTab).
+ * The query orders by expiry ascending, so the most urgent rows come first.
+ */
+export async function getRenewalsView(tab: RenewalTab): Promise<RenewalRow[]> {
+  const [rows, thresholds] = await Promise.all([
+    repo.findRenewalsQueue(),
+    getThresholds(),
+  ]);
+  const now = new Date();
+  return rows
+    .map((r): RenewalRow => {
+      const daysRemaining = daysRemainingFromDate(r.expiryDate, now);
+      const total = r.totalAmount === null ? null : Number(r.totalAmount);
+      const paid = r.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const status = r.status as PeriodStatus;
+      const followUpStatus = r.followUpStatus as FollowUpStatus;
+      return {
+        periodId: r.id,
+        caseId: r.case.id,
+        caseNumber: r.case.number,
+        customerName: customerDisplayName(r.case.customer),
+        serviceName: r.case.service.name,
+        ownerName: r.case.owner.fullName,
+        ownerId: r.case.ownerId,
+        indexNumber: r.indexNumber,
+        expiryDate: dateToJalali(r.expiryDate),
+        daysRemaining,
+        followUpStatus,
+        status,
+        totalAmount: total,
+        balance: total === null ? null : total - paid,
+        abandonable: isAbandonable(
+          { status, daysRemaining, followUpStatus },
+          thresholds.abandonmentDays,
+        ),
+      };
+    })
+    .filter((row) =>
+      inRenewalTab(tab, {
+        status: row.status,
+        daysRemaining: row.daysRemaining,
+        followUpStatus: row.followUpStatus,
+      }),
+    );
 }

@@ -9,6 +9,7 @@ import { getService, listActiveServiceOptions } from "@/modules/services";
 import { getServicePaths, listDurations } from "@/modules/paths";
 import { listActiveCustomerOptions, saveCaseBirthInfoTx } from "@/modules/customers";
 import { listCaseOwnerOptions } from "@/modules/employees";
+import { getThresholds } from "@/modules/settings";
 import { can, type Authorizable } from "@/modules/permissions";
 import {
   createRegistrationPeriodTx,
@@ -21,8 +22,27 @@ import {
   addExceptionalStageTx,
   deleteStageTx,
   moveStageTx,
+  getRenewablePeriod,
+  getPeriodLifecycle,
+  renewPeriodTx,
+  setPeriodStatusTx,
+  setPeriodFollowUpTx,
+  isAbandonable,
+  RENEWAL_FORBIDDEN,
+  SERVICE_NOT_RENEWABLE,
+  NO_ACTIVE_PERIOD,
+  PERIOD_NOT_FOUND,
+  NOT_ABANDONABLE,
+  NOT_ABANDONED,
+  START_DATE_INVALID,
+  CASE_NOT_FOUND,
+  CASE_CANCELLED as PERIOD_CASE_CANCELLED,
   type PeriodRow,
   type StageTemplate,
+  type RenewalMeta,
+  type RenewalInput,
+  type RenewalFollowUpInput,
+  type PeriodActionInput,
 } from "@/modules/periods";
 import type { CustomerType, CaseStatus } from "@/types/enums";
 import * as repo from "./cases.repository";
@@ -496,4 +516,271 @@ export async function listActiveCaseOptions(): Promise<
         : c.customer.fullName ?? "";
     return { id: c.id, number: c.number, label: name ? `${c.number} — ${name}` : c.number };
   });
+}
+
+// --- Renewal, follow-up & abandonment (C-9 / C-10 / Phase 13) ---------------
+// A renewal is a case-level write that spans the periods module: the cases
+// service authorizes (record-scoped, rule 3), validates the duration + start,
+// computes the new expiry by Jalali months (rule 2 — never fixed days), copies
+// the service's RENEWAL path stages, and runs periods' renewPeriodTx inside
+// runCaseMutation so the close-previous / create-next / copy-stages write plus
+// Case.lastActivityAt + the ActivityHistory row are ONE transaction (rule 4).
+// The manual abandon/restore controls (Phase 15 automates abandonment) and the
+// renewal follow-up (which sets Period.followUpStatus + records a note, but
+// CANNOT create a FollowUp — resultId is a required FK) follow the same shape.
+// `renewals.abandon` has no dedicated permission key, so Abandon is gated under
+// `renewals.register`; Restore under `renewals.restore`.
+
+type RenewalResult =
+  | { ok: true }
+  | { ok: false; code: 403 | 404 | 409 | 422; message: string };
+
+/** May the user register a renewal on this case? */
+export function canRegisterRenewal(user: Authorizable, ownerId: string): boolean {
+  return can(user, "renewals.register") && can(user, "cases.edit", { ownerId });
+}
+
+/** May the user record a renewal follow-up on this case? */
+export function canRecordRenewalFollowUp(user: Authorizable, ownerId: string): boolean {
+  return can(user, "renewals.record_followup") && can(user, "cases.edit", { ownerId });
+}
+
+/** May the user restore an abandoned period on this case? */
+export function canRestore(user: Authorizable, ownerId: string): boolean {
+  return can(user, "renewals.restore") && can(user, "cases.edit", { ownerId });
+}
+
+/**
+ * Live meta for the renewal form (C-9): whether the case's service is renewable,
+ * its active validity durations, and the default start date (the current active
+ * period's expiry — the new span begins where the old one ends). Null when the
+ * case does not exist.
+ */
+export async function getRenewalMeta(caseId: string): Promise<RenewalMeta | null> {
+  const kase = await repo.findCaseForRenewal(caseId);
+  if (!kase) return null;
+
+  const service = await getService(kase.serviceId);
+  const renewable = !!service?.renewable;
+
+  const [durations, active] = await Promise.all([
+    renewable ? listDurations(kase.serviceId) : Promise.resolve([]),
+    getRenewablePeriod(caseId),
+  ]);
+
+  return {
+    renewable,
+    durations: durations
+      .filter((d) => d.active)
+      .map((d) => ({
+        id: d.id,
+        title: d.title,
+        monthCount: d.monthCount,
+        isDefault: d.isDefault,
+      })),
+    defaultStartDate: active?.expiryDate ?? null,
+  };
+}
+
+// RENEWAL_ACTIONS_PLACEHOLDER
+
+/**
+ * Register a renewal (C-9). Authorizes (record-scoped), blocks a cancelled case,
+ * checks the service is renewable and the chosen duration is valid, computes the
+ * new expiry by Jalali months, copies the RENEWAL path stages, then closes the
+ * previous period (→ RENEWED) and creates the next ACTIVE period — all in one
+ * transaction (rule 4). The reminder cycle restarts automatically (SentReminder
+ * is keyed by the new periodId).
+ */
+export async function registerRenewal(
+  user: Authorizable,
+  input: RenewalInput,
+): Promise<RenewalResult> {
+  const kase = await repo.findCaseForRenewal(input.caseId);
+  if (!kase) return { ok: false, code: 404, message: CASE_NOT_FOUND };
+  if (!canRegisterRenewal(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: RENEWAL_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: PERIOD_CASE_CANCELLED };
+  }
+
+  const service = await getService(kase.serviceId);
+  if (!service?.renewable) {
+    return { ok: false, code: 409, message: SERVICE_NOT_RENEWABLE };
+  }
+
+  const durations = (await listDurations(kase.serviceId)).filter((d) => d.active);
+  if (durations.length === 0) {
+    return { ok: false, code: 409, message: NO_DURATION_DEFINED };
+  }
+  const durationId = input.durationId?.trim() ?? "";
+  if (!durationId) {
+    return { ok: false, code: 422, message: DURATION_REQUIRED };
+  }
+  const duration = durations.find((d) => d.id === durationId);
+  if (!duration) {
+    return { ok: false, code: 422, message: DURATION_INVALID };
+  }
+
+  const startJ = parseJalali(input.startDate);
+  if (!startJ) {
+    return { ok: false, code: 422, message: START_DATE_INVALID };
+  }
+  const startDate = toGregorianDate(startJ);
+  const expiryDate = toGregorianDate(addMonths(startJ, duration.monthCount));
+
+  const active = await getRenewablePeriod(input.caseId);
+  if (!active) {
+    return { ok: false, code: 409, message: NO_ACTIVE_PERIOD };
+  }
+
+  const paths = await getServicePaths(kase.serviceId);
+  const stages: StageTemplate[] = paths.renewal.map((s) => ({
+    title: s.title,
+    order: s.order,
+  }));
+
+  const totalAmount = input.renewalAmount === null ? null : BigInt(input.renewalAmount);
+
+  await repo.caseMutationTx({
+    caseId: input.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) =>
+      renewPeriodTx(tx, {
+        previousPeriodId: active.id,
+        caseId: input.caseId,
+        indexNumber: active.indexNumber + 1,
+        startDate,
+        expiryDate,
+        totalAmount,
+        stages,
+      }).then(() => undefined),
+    historyAction: "period.renewed",
+    historyDetail: JSON.stringify({
+      previousPeriodId: active.id,
+      indexNumber: active.indexNumber + 1,
+      durationId,
+    }),
+  });
+  return { ok: true };
+}
+
+// RENEWAL_FOLLOWUP_PLACEHOLDER
+
+/**
+ * Record a renewal follow-up (C-9). Sets the active period's follow-up status and
+ * records the note in ActivityHistory — it does NOT create a FollowUp row (that
+ * requires a result FK, C-11). One transaction (rule 4). Authorization is
+ * record-scoped: `renewals.record_followup` + `cases.edit` on the owner.
+ */
+export async function recordRenewalFollowUp(
+  user: Authorizable,
+  input: RenewalFollowUpInput,
+): Promise<RenewalResult> {
+  const kase = await repo.findCaseForRenewal(input.caseId);
+  if (!kase) return { ok: false, code: 404, message: CASE_NOT_FOUND };
+  if (!canRecordRenewalFollowUp(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: RENEWAL_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: PERIOD_CASE_CANCELLED };
+  }
+
+  const active = await getRenewablePeriod(input.caseId);
+  if (!active) {
+    return { ok: false, code: 409, message: NO_ACTIVE_PERIOD };
+  }
+
+  const note = input.note && input.note.trim() ? input.note.trim() : null;
+
+  await repo.caseMutationTx({
+    caseId: input.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) => setPeriodFollowUpTx(tx, active.id, { followUpStatus: input.followUpStatus }),
+    historyAction: "period.followup",
+    historyDetail: JSON.stringify({
+      periodId: active.id,
+      followUpStatus: input.followUpStatus,
+      ...(note ? { note } : {}),
+    }),
+  });
+  return { ok: true };
+}
+
+/**
+ * Manually abandon an expired, past-threshold period (C-10). The engine automates
+ * this in Phase 15; here a user with `renewals.register` on the case may do it
+ * when the abandonment rule holds (isAbandonable — expired past the threshold, or
+ * "Not interested" immediately). One transaction (rule 4).
+ */
+export async function abandonPeriod(
+  user: Authorizable,
+  input: PeriodActionInput,
+): Promise<RenewalResult> {
+  const lifecycle = await getPeriodLifecycle(input.periodId);
+  if (!lifecycle) return { ok: false, code: 404, message: PERIOD_NOT_FOUND };
+  const kase = await repo.findCaseForRenewal(lifecycle.caseId);
+  if (!kase) return { ok: false, code: 404, message: CASE_NOT_FOUND };
+  if (!canRegisterRenewal(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: RENEWAL_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: PERIOD_CASE_CANCELLED };
+  }
+
+  const { abandonmentDays } = await getThresholds();
+  const abandonable = isAbandonable(
+    {
+      status: lifecycle.status,
+      daysRemaining: lifecycle.daysRemaining,
+      followUpStatus: lifecycle.followUpStatus,
+    },
+    abandonmentDays,
+  );
+  if (!abandonable) {
+    return { ok: false, code: 409, message: NOT_ABANDONABLE };
+  }
+
+  await repo.caseMutationTx({
+    caseId: lifecycle.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) => setPeriodStatusTx(tx, input.periodId, "ABANDONED"),
+    historyAction: "period.abandoned",
+    historyDetail: JSON.stringify({ periodId: input.periodId, indexNumber: lifecycle.indexNumber }),
+  });
+  return { ok: true };
+}
+
+/**
+ * Restore an abandoned period (C-10): ABANDONED → ACTIVE, recorded in history.
+ * Authorization is record-scoped: `renewals.restore` + `cases.edit` on the owner.
+ */
+export async function restorePeriod(
+  user: Authorizable,
+  input: PeriodActionInput,
+): Promise<RenewalResult> {
+  const lifecycle = await getPeriodLifecycle(input.periodId);
+  if (!lifecycle) return { ok: false, code: 404, message: PERIOD_NOT_FOUND };
+  const kase = await repo.findCaseForRenewal(lifecycle.caseId);
+  if (!kase) return { ok: false, code: 404, message: CASE_NOT_FOUND };
+  if (!canRestore(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: RENEWAL_FORBIDDEN };
+  }
+  if (lifecycle.status !== "ABANDONED") {
+    return { ok: false, code: 409, message: NOT_ABANDONED };
+  }
+
+  await repo.caseMutationTx({
+    caseId: lifecycle.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) => setPeriodStatusTx(tx, input.periodId, "ACTIVE"),
+    historyAction: "period.restored",
+    historyDetail: JSON.stringify({ periodId: input.periodId, indexNumber: lifecycle.indexNumber }),
+  });
+  return { ok: true };
 }

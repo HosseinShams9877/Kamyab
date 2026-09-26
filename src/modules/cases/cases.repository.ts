@@ -166,6 +166,18 @@ export async function findCaseForStage(
   });
 }
 
+/** The case fields a renewal needs: ownership + status (authorization + the
+ *  cancelled block) plus serviceId (to look up the renewal path + durations).
+ *  Null when the case does not exist. */
+export async function findCaseForRenewal(
+  caseId: string,
+): Promise<{ id: string; number: string; status: string; ownerId: string; serviceId: string } | null> {
+  return prisma.case.findUnique({
+    where: { id: caseId },
+    select: { id: true, number: true, status: true, ownerId: true, serviceId: true },
+  });
+}
+
 // --- Case mutation transaction (C-6 stages, C-7 financial) ------------------
 
 export type CaseMutationTxArgs = {
