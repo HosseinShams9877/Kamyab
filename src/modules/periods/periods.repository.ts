@@ -192,6 +192,35 @@ export async function setPeriodTotalTx(
   });
 }
 
+/** A case's active period (its follow-up status + status), for the record-result
+ *  effect-on-renewal update (C-11 / B-6). Null when the case has no active period. */
+export async function findActivePeriod(
+  caseId: string,
+): Promise<{ id: string; followUpStatus: string; status: string } | null> {
+  return prisma.period.findFirst({
+    where: { caseId, status: "ACTIVE" },
+    select: { id: true, followUpStatus: true, status: true },
+    orderBy: { indexNumber: "desc" },
+  });
+}
+
+/** Update a period's follow-up status (and optionally its status) on the caller's
+ *  transaction (rule 4). Driven by the record-result effect-on-renewal mapping
+ *  (B-6): "not interested" also moves the period to ABANDONED. */
+export async function setPeriodFollowUpTx(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+  data: { followUpStatus: string; status?: string },
+): Promise<void> {
+  await tx.period.update({
+    where: { id: periodId },
+    data: {
+      followUpStatus: data.followUpStatus,
+      ...(data.status ? { status: data.status } : {}),
+    },
+  });
+}
+
 // --- Stage engine writes (tx-aware, run on the cases module's transaction) --
 
 /** Open statuses: a stage still on the path. Closed = DONE | NOT_NEEDED. */

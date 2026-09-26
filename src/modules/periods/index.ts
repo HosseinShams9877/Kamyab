@@ -24,6 +24,8 @@ export {
   moveStageTx,
   getPeriodCase,
   setPeriodTotalTx,
+  getActivePeriod,
+  setPeriodFollowUpTx,
 } from "./periods.service";
 
 // --- Types (isomorphic) -----------------------------------------------------

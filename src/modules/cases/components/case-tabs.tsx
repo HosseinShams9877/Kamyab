@@ -11,10 +11,10 @@ import { CaseStages } from "./case-stages";
 // The five case-page tabs (C-5). The Stages tab hosts the interactive stage
 // engine (C-6 / Phase 10 — the strip, current-stage line, the six actions, and
 // exceptional stages); the Periods tab lists every validity span; the Payments
-// tab renders the `paymentsPanel` slot composed on the server (C-7 / Phase 11)
-// so this client component never imports the payments barrel. Tasks and History
-// show a "later phase" placeholder so the frame is complete without pretending
-// the data exists yet.
+// tab renders the `paymentsPanel` slot and the Tasks tab the `tasksPanel` slot,
+// both composed on the server (C-7 / C-11) so this client component never imports
+// the payments or followups barrels. History shows a "later phase" placeholder so
+// the frame is complete without pretending the data exists yet.
 
 type TabKey = "stages" | "tasks" | "periods" | "payments" | "history";
 
@@ -37,6 +37,7 @@ export function CaseTabs({
   canAddStage,
   isCancelled,
   paymentsPanel,
+  tasksPanel,
 }: {
   current: PeriodRow | null;
   periods: PeriodRow[];
@@ -44,6 +45,7 @@ export function CaseTabs({
   canAddStage: boolean;
   isCancelled: boolean;
   paymentsPanel: ReactNode;
+  tasksPanel: ReactNode;
 }) {
   const [active, setActive] = useState<TabKey>("stages");
 
@@ -85,9 +87,7 @@ export function CaseTabs({
         />
       )}
       {active === "periods" && <PeriodsPanel periods={periods} />}
-      {active === "tasks" && (
-        <div className={placeholderClass}>کارها در فاز بعدی افزوده می‌شود.</div>
-      )}
+      {active === "tasks" && tasksPanel}
       {active === "payments" && paymentsPanel}
       {active === "history" && (
         <div className={placeholderClass}>تاریخچه در فاز بعدی افزوده می‌شود.</div>

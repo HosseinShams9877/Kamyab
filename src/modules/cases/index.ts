@@ -18,6 +18,7 @@ export {
   canAddStages,
   getCaseOwnership,
   runCaseMutation,
+  listActiveCaseOptions,
 } from "./cases.service";
 export type { CasePage, CaseMutationArgs } from "./cases.service";
 

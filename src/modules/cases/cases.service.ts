@@ -481,3 +481,19 @@ export async function getCaseOwnership(
 export function runCaseMutation(args: CaseMutationArgs): Promise<void> {
   return repo.caseMutationTx(args);
 }
+
+/** Active cases (NEW | IN_PROGRESS) as options for the task form's related-case
+ *  picker (C-11 — a task attaches only to an active case). The label pairs the
+ *  case number with the customer's display name (type-dependent). */
+export async function listActiveCaseOptions(): Promise<
+  { id: string; number: string; label: string }[]
+> {
+  const rows = await repo.findActiveCases();
+  return rows.map((c) => {
+    const name =
+      c.customer.type === "LEGAL"
+        ? c.customer.companyName ?? ""
+        : c.customer.fullName ?? "";
+    return { id: c.id, number: c.number, label: name ? `${c.number} — ${name}` : c.number };
+  });
+}

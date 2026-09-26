@@ -173,3 +173,21 @@ export function setPeriodTotalTx(
 ): Promise<void> {
   return repo.setPeriodTotalTx(tx, periodId, totalAmount);
 }
+
+/** A case's active period (id + follow-up status + status), for the record-result
+ *  effect-on-renewal update (C-11 / B-6). Null when there is no active period. */
+export function getActivePeriod(
+  caseId: string,
+): Promise<{ id: string; followUpStatus: string; status: string } | null> {
+  return repo.findActivePeriod(caseId);
+}
+
+/** Update a period's follow-up status (and optionally status) on the caller's
+ *  transaction (record-result effect-on-renewal, B-6). */
+export function setPeriodFollowUpTx(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+  data: { followUpStatus: string; status?: string },
+): Promise<void> {
+  return repo.setPeriodFollowUpTx(tx, periodId, data);
+}

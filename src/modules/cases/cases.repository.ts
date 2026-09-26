@@ -114,6 +114,26 @@ export async function findCaseCore(id: string): Promise<CaseCoreRow | null> {
   });
 }
 
+/** Active cases (NEW | IN_PROGRESS) as options for the task form's related-case
+ *  picker (C-11). The customer's display name depends on their type. */
+export async function findActiveCases(): Promise<
+  {
+    id: string;
+    number: string;
+    customer: { type: string; fullName: string | null; companyName: string | null };
+  }[]
+> {
+  return prisma.case.findMany({
+    where: { status: { in: ["NEW", "IN_PROGRESS"] } },
+    orderBy: { lastActivityAt: "desc" },
+    select: {
+      id: true,
+      number: true,
+      customer: { select: { type: true, fullName: true, companyName: true } },
+    },
+  });
+}
+
 /** The customer's active flag + type, for register validation and to route the
  *  birth-info patch (NATURAL → birthDate, LEGAL → foundingDate). Null if absent. */
 export async function findCustomerForRegister(

@@ -17,6 +17,7 @@ import {
 } from "@/modules/payments";
 import { toPersianDigits } from "@/lib/digits";
 import { formatToman } from "@/lib/money";
+import { listCaseFollowUps, FollowUpTimeline } from "@/modules/followups";
 
 // A single case's page (C-5). Phase 9 read-only shell: a live header (computed
 // days-remaining + path progress, never stored — rule 2), a Path card and a
@@ -83,6 +84,12 @@ export default async function CaseDetailPage({
       شما مجاز به مشاهدهٔ اطلاعات مالی این پرونده نیستید.
     </div>
   );
+
+  // The Tasks tab body (C-11): the case's follow-up timeline, composed on the
+  // server and handed to the client CaseTabs as a slot (so it never imports the
+  // followups barrel). The tasks themselves are managed on the /tasks page.
+  const followUps = await listCaseFollowUps(header.id);
+  const tasksPanel = <FollowUpTimeline followUps={followUps} />;
 
   const daysText =
     header.daysRemaining === null
@@ -223,6 +230,7 @@ export default async function CaseDetailPage({
         canAddStage={canAddStage}
         isCancelled={isCancelled}
         paymentsPanel={paymentsPanel}
+        tasksPanel={tasksPanel}
       />
     </main>
   );
