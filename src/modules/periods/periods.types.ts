@@ -167,3 +167,40 @@ export type RenewalMeta = {
   durations: { id: string; title: string; monthCount: number; isDefault: boolean }[];
   defaultStartDate: string | null; // Jalali YYYY/MM/DD
 };
+
+// --- Engine seams (C-14 / Phase 15) -----------------------------------------
+// Structural views the engine consumes through the periods service. periods must
+// NOT import engine types (the module DAG points only downward, and nothing
+// imports the engine); these mirror the engine's ReminderCandidate /
+// UnfollowedRenewal shapes and satisfy the port contract by structural typing.
+
+/** One active reminder rule surfaced to the engine. */
+export type EngineReminderRule = {
+  id: string;
+  daysBefore: number; // +before / 0 on expiry / −after
+  channel: string; // INTERNAL_NOTIFICATION | SMS_TO_CUSTOMER
+  recipient: string; // CASE_OWNER | ALL_MANAGERS | CUSTOMER
+};
+
+/** A renewal-reminder candidate: an ACTIVE period of a non-cancelled case, with
+ *  days-remaining computed at read time (rule 2), the expiry as an ASCII Jalali
+ *  string for the SMS body, and the service's active rules. */
+export type EngineReminderCandidate = {
+  periodId: string;
+  caseNumber: string;
+  ownerId: string;
+  daysRemaining: number | null;
+  expiryJalali: string | null;
+  serviceName: string;
+  customer: { type: string; fullName: string | null; companyName: string | null; mobile: string };
+  rules: EngineReminderRule[];
+};
+
+/** An ACTIVE, not-yet-followed-up renewal with its computed days-remaining, for
+ *  the engine's uncontacted-renewal nudge (the 7-day window is applied there). */
+export type EngineUnfollowedRenewal = {
+  caseId: string;
+  caseNumber: string;
+  ownerId: string;
+  daysRemaining: number;
+};

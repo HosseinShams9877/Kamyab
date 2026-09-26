@@ -23,6 +23,8 @@ export {
   createTaskTx,
   cancelOpenTasksForCaseTx,
   countOpenTasksForCase,
+  archiveClosedTasksBefore,
+  listOverdueOwners,
 } from "./tasks.service";
 export type { TaskResult, TaskWriteData } from "./tasks.service";
 

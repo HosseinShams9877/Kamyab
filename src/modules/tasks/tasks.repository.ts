@@ -75,6 +75,36 @@ export async function findTaskForAction(taskId: string): Promise<
 
 // APPEND_MARKER
 
+// --- Engine seams (C-14 / Phase 15) -----------------------------------------
+
+/** Auto-archive: mark every COMPLETED/CANCELLED task closed before `cutoff` as
+ *  archived. Idempotent (already-archived rows are excluded). Returns the number
+ *  newly archived. */
+export async function archiveClosedTasksBefore(cutoff: Date): Promise<number> {
+  const res = await prisma.task.updateMany({
+    where: {
+      status: { in: ["COMPLETED", "CANCELLED"] },
+      closedAt: { lt: cutoff },
+      archivedAt: null,
+    },
+    data: { archivedAt: new Date() },
+  });
+  return res.count;
+}
+
+/** OPEN, non-archived tasks due before `before` (local start-of-today), with the
+ *  owner's id + name, for the overdue-task manager alert. The service tallies per
+ *  owner; the ≥threshold test lives in the engine. */
+export async function findOverdueOpenTasks(
+  before: Date,
+): Promise<{ ownerId: string; ownerName: string }[]> {
+  const rows = await prisma.task.findMany({
+    where: { status: "OPEN", archivedAt: null, dueDate: { lt: before } },
+    select: { ownerId: true, owner: { select: { fullName: true } } },
+  });
+  return rows.map((r) => ({ ownerId: r.ownerId, ownerName: r.owner.fullName }));
+}
+
 /** Cancel every OPEN task of a case and notify each distinct owner (C-8). Part of
  *  the case-cancellation transaction (rule 4), so it is tx-aware and takes the
  *  ready-built Persian `message` (the cases service owns the text — this layer

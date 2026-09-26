@@ -212,6 +212,76 @@ export async function findRenewalsQueue(): Promise<RenewalQueueRow[]> {
   });
 }
 
+// --- Engine seams (C-14 / Phase 15) -----------------------------------------
+// Read/write seams the automatic engine drives through periods.service (rule 9:
+// the engine never touches the Period table directly). Reading the service's
+// active reminder rules via a relation-select inside this periods-owned Period
+// query is a relation read (like findRenewalsQueue), not a cross-module call.
+
+/** An ACTIVE period of a non-cancelled case whose service has ≥1 active rule,
+ *  with those rules and the customer's contact details, for renewal reminders. */
+export type ReminderCandidateRow = {
+  id: string;
+  expiryDate: Date | null;
+  case: {
+    number: string;
+    ownerId: string;
+    service: {
+      name: string;
+      reminderRules: { id: string; daysBefore: number; channel: string; recipient: string }[];
+    };
+    customer: { type: string; fullName: string | null; companyName: string | null; mobile: string };
+  };
+};
+
+export async function findReminderCandidates(): Promise<ReminderCandidateRow[]> {
+  return prisma.period.findMany({
+    where: {
+      status: "ACTIVE",
+      expiryDate: { not: null },
+      case: {
+        status: { not: "CANCELLED" },
+        service: { reminderRules: { some: { active: true } } },
+      },
+    },
+    orderBy: { expiryDate: "asc" },
+    select: {
+      id: true,
+      expiryDate: true,
+      case: {
+        select: {
+          number: true,
+          ownerId: true,
+          service: {
+            select: {
+              name: true,
+              reminderRules: {
+                where: { active: true },
+                select: { id: true, daysBefore: true, channel: true, recipient: true },
+              },
+            },
+          },
+          customer: {
+            select: { type: true, fullName: true, companyName: true, mobile: true },
+          },
+        },
+      },
+    },
+  });
+}
+
+/** Move the given periods to ABANDONED in one statement (atomic). The engine has
+ *  already decided eligibility (isAbandonable); this only writes. Returns the
+ *  number of rows actually changed. */
+export async function abandonPeriods(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const res = await prisma.period.updateMany({
+    where: { id: { in: ids }, status: "ACTIVE" },
+    data: { status: "ABANDONED" },
+  });
+  return res.count;
+}
+
 // --- Reads (case page shell, C-5) ------------------------------------------
 
 export type PeriodWithDetail = {

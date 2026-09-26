@@ -14,6 +14,7 @@
     "db:dev:push": "node scripts/prisma-dev.mjs push",
     "db:dev:studio": "node scripts/prisma-dev.mjs studio",
     "db:dev:seed": "tsx prisma/seed.ts",
+    "engine": "tsx scripts/engine.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "format": "prettier --write ."

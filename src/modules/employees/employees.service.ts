@@ -61,6 +61,12 @@ export function listCaseOwnerOptions(): Promise<EmployeeOption[]> {
   return repo.listActiveEmployees();
 }
 
+/** Ids of every active manager, for engine alerts addressed to all managers
+ *  (C-14). Read once per run and injected into the engine ports. */
+export function listActiveManagerIds(): Promise<string[]> {
+  return repo.findActiveManagerIds();
+}
+
 /**
  * Create an employee. Enforces mobile uniqueness (mobile is the username) and an
  * existing/active department when one is given, then hashes the initial password

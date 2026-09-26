@@ -45,6 +45,12 @@ cp .env.example .env
   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   ```
 
+- `ENGINE_SECRET` — the shared secret that guards the automatic-engine trigger
+  (`POST /api/engine/run`). Replace with a long random string (generate it the
+  same way as `SESSION_SECRET`). The scheduler must send this value in the
+  `x-engine-secret` request header; the route refuses to run when the variable
+  is unset. See [The automatic engine](#10-the-automatic-engine-mandatory-scheduler).
+
 `.env` is gitignored; `.env.example` is committed as the template.
 
 ## 4. Set up the development database (SQLite)
@@ -135,6 +141,75 @@ of both providers, no code changes are needed to switch — only `DATABASE_URL`.
 
 ---
 
+## 10. The automatic engine (MANDATORY scheduler)
+
+The system has time-driven work that no user action triggers: renewal reminders,
+overdue-task and uncontacted-renewal alerts, archiving long-closed tasks,
+abandoning expired un-renewed periods, birthday/founding-day greetings, and
+draining the SMS queue. These run in a single **engine** that is page-less — it
+is invoked out of band, not from the UI.
+
+**An external scheduler is REQUIRED.** Without one, none of the above ever
+happens (reminders are never sent, nothing is archived or abandoned). The
+application does not schedule itself; you must configure the operating system or
+your host to call the engine **every 6 hours**.
+
+### What to schedule
+
+Either trigger works and both call the same runner; pick one:
+
+- **HTTP (recommended in production):** `POST` to `/api/engine/run` with the
+  `x-engine-secret` header set to your `ENGINE_SECRET`:
+
+  ```bash
+  curl -X POST https://YOUR_HOST/api/engine/run \
+    -H "x-engine-secret: $ENGINE_SECRET"
+  ```
+
+- **CLI (handy locally / on the app server):**
+
+  ```bash
+  npm run engine
+  ```
+
+### Example schedules (every 6 hours)
+
+- **Linux/macOS (cron):**
+
+  ```cron
+  0 */6 * * * curl -fsS -X POST https://YOUR_HOST/api/engine/run -H "x-engine-secret: YOUR_ENGINE_SECRET"
+  ```
+
+- **Windows (Task Scheduler):** create a task that runs every 6 hours invoking
+  PowerShell:
+
+  ```powershell
+  Invoke-RestMethod -Method Post -Uri "https://YOUR_HOST/api/engine/run" -Headers @{ "x-engine-secret" = "YOUR_ENGINE_SECRET" }
+  ```
+
+### Why it is safe to run often (and to miss a run)
+
+The engine is **idempotent**. Every reminder is recorded once per period, and
+every greeting once per Jalali year, enforced by database unique indexes — so a
+scheduler that fires twice, or a retry, never sends a duplicate. Conversely, a
+**missed** run is fully made up on the next run: the due condition is "within the
+window or past it" (`≤`), so a reminder that should have gone out during a
+downtime is sent the next time the engine runs. Managerial alerts additionally
+carry a 24-hour anti-repeat, so a 6-hourly cadence does not spam them.
+
+When real SMS sending is **off** (Settings → SMS gateway), messages are still
+built and recorded as `QUEUED` but never handed to a provider; turning it on
+lets the next run drain the queue.
+
+### Verifying it
+
+Managers/supervisors can open **/engine** in the app to see the most recent runs
+and what each one did (reminders, greetings, archives, abandonments, alerts,
+SMS sent, and any errors). Each invocation always writes one run-log row, so the
+page also confirms the scheduler is actually firing.
+
+---
+
 ## Command reference
 
 | Command | What it does |
@@ -145,6 +220,7 @@ of both providers, no code changes are needed to switch — only `DATABASE_URL`.
 | `npm test` / `npm run test:watch` | Run unit tests |
 | `npm run db:dev:push` | Create/sync the SQLite dev DB + generate client |
 | `npm run db:dev:studio` | Browse the dev DB in Prisma Studio |
+| `npm run engine` | Run the automatic engine once (CLI trigger; see §10) |
 | `npm run db:generate` | Generate the Prisma client (canonical/Postgres schema) |
 | `npm run prisma:deploy` | Apply migrations in production (PostgreSQL) |
 | `npm run lint` | Lint |

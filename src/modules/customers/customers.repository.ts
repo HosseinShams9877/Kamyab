@@ -194,6 +194,41 @@ export async function countCustomerCases(id: string): Promise<number> {
   return prisma.case.count({ where: { customerId: id } });
 }
 
+// --- Engine seams (C-14 / Phase 15) -----------------------------------------
+
+/** Active, greeting-enabled customers that have a birth or founding date to match
+ *  today against, for the birthday / founding-day greeting. The service reduces
+ *  the applicable date to Jalali parts; the once-a-year guard is the BirthdayLog
+ *  unique index. */
+export type GreetingCandidateRow = {
+  id: string;
+  type: string;
+  fullName: string | null;
+  companyName: string | null;
+  mobile: string;
+  birthDate: Date | null;
+  foundingDate: Date | null;
+};
+
+export async function findGreetingCandidates(): Promise<GreetingCandidateRow[]> {
+  return prisma.customer.findMany({
+    where: {
+      status: true,
+      sendGreeting: true,
+      OR: [{ birthDate: { not: null } }, { foundingDate: { not: null } }],
+    },
+    select: {
+      id: true,
+      type: true,
+      fullName: true,
+      companyName: true,
+      mobile: true,
+      birthDate: true,
+      foundingDate: true,
+    },
+  });
+}
+
 // --- List ------------------------------------------------------------------
 
 export type ListQuery = {

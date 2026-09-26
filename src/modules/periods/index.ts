@@ -31,6 +31,9 @@ export {
   renewPeriodTx,
   setPeriodStatusTx,
   getRenewalsView,
+  listReminderCandidates,
+  listUnfollowedRenewals,
+  abandonExpiredPeriods,
 } from "./periods.service";
 
 // --- Types (isomorphic) -----------------------------------------------------
@@ -50,6 +53,9 @@ export type {
   RenewalRow,
   PeriodCardFollowUp,
   RenewalMeta,
+  EngineReminderRule,
+  EngineReminderCandidate,
+  EngineUnfollowedRenewal,
 } from "./periods.types";
 
 // --- Schema (isomorphic) ----------------------------------------------------

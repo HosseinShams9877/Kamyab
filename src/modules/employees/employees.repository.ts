@@ -106,6 +106,15 @@ export function countOtherActiveManagers(excludeId: string): Promise<number> {
   });
 }
 
+/** Ids of every active manager, for engine alerts addressed to "all managers". */
+export async function findActiveManagerIds(): Promise<string[]> {
+  const rows = await prisma.employee.findMany({
+    where: { role: "MANAGER", status: true },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
 /**
  * Active workload for an employee: active cases (NEW or IN_PROGRESS) they own and
  * open tasks (OPEN) they own. Both drive the deactivation-transfer decision.

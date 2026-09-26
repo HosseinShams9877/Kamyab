@@ -35,6 +35,7 @@ export default async function ManagerLayout({
     can(user, "services.view") && { href: "/services", label: "خدمات" },
     can(user, "employees.view") && { href: "/employees", label: "کارمندان" },
     can(user, "settings.view") && { href: "/settings", label: "تنظیمات" },
+    can(user, "settings.view") && { href: "/engine", label: "موتور خودکار" },
     can(user, "reports.view") && { href: "/reports", label: "گزارش‌ها" },
   ].filter(Boolean) as NavItem[];
 

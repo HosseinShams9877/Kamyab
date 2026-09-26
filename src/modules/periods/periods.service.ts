@@ -16,6 +16,8 @@ import type {
   ApplyStageActionArgs,
   AddExceptionalStageArgs,
   MoveStageArgs,
+  EngineReminderCandidate,
+  EngineUnfollowedRenewal,
 } from "./periods.types";
 
 // Business logic for the periods domain. Jalali<->Date conversion and the
@@ -333,4 +335,82 @@ export async function getRenewalsView(tab: RenewalTab): Promise<RenewalRow[]> {
         followUpStatus: row.followUpStatus,
       }),
     );
+}
+
+// --- Engine seams (C-14 / Phase 15) -----------------------------------------
+// The automatic engine reads renewal reminders, uncontacted renewals and the
+// auto-abandon set through these (rule 9: the engine never touches the Period
+// table directly). days-remaining is computed here from the raw expiry (rule 2)
+// and `now` is injectable so a run is deterministic. Returns structural views
+// (periods.types) — periods must not import engine types (DAG points downward).
+
+/** ACTIVE periods of non-cancelled cases whose service has active reminder rules,
+ *  with days-remaining + expiry resolved for the engine's reminder task. */
+export async function listReminderCandidates(
+  now: Date = new Date(),
+): Promise<EngineReminderCandidate[]> {
+  const rows = await repo.findReminderCandidates();
+  return rows.map((r) => ({
+    periodId: r.id,
+    caseNumber: r.case.number,
+    ownerId: r.case.ownerId,
+    daysRemaining: daysRemainingFromDate(r.expiryDate, now),
+    expiryJalali: dateToJalali(r.expiryDate),
+    serviceName: r.case.service.name,
+    customer: {
+      type: r.case.customer.type,
+      fullName: r.case.customer.fullName,
+      companyName: r.case.customer.companyName,
+      mobile: r.case.customer.mobile,
+    },
+    rules: r.case.service.reminderRules.map((rule) => ({
+      id: rule.id,
+      daysBefore: rule.daysBefore,
+      channel: rule.channel,
+      recipient: rule.recipient,
+    })),
+  }));
+}
+
+/** ACTIVE, not-yet-followed-up renewals with a computable days-remaining. The
+ *  engine applies the ≤7-day window; here we only surface the candidates. */
+export async function listUnfollowedRenewals(
+  now: Date = new Date(),
+): Promise<EngineUnfollowedRenewal[]> {
+  const rows = await repo.findRenewalsQueue();
+  const result: EngineUnfollowedRenewal[] = [];
+  for (const r of rows) {
+    if (r.status !== "ACTIVE") continue;
+    if (r.followUpStatus !== "NOT_FOLLOWED_UP") continue;
+    const daysRemaining = daysRemainingFromDate(r.expiryDate, now);
+    if (daysRemaining === null) continue;
+    result.push({
+      caseId: r.case.id,
+      caseNumber: r.case.number,
+      ownerId: r.case.ownerId,
+      daysRemaining,
+    });
+  }
+  return result;
+}
+
+/** Abandon every ACTIVE period that now meets the abandonment rule (the same
+ *  isAbandonable guard the renewals page uses, with the settings threshold).
+ *  NOT_INTERESTED is immediate; otherwise the period must be expired by more than
+ *  the threshold. Returns the number abandoned. */
+export async function abandonExpiredPeriods(now: Date = new Date()): Promise<number> {
+  const [rows, thresholds] = await Promise.all([repo.findRenewalsQueue(), getThresholds()]);
+  const ids = rows
+    .filter((r) =>
+      isAbandonable(
+        {
+          status: r.status as PeriodStatus,
+          daysRemaining: daysRemainingFromDate(r.expiryDate, now),
+          followUpStatus: r.followUpStatus as FollowUpStatus,
+        },
+        thresholds.abandonmentDays,
+      ),
+    )
+    .map((r) => r.id);
+  return repo.abandonPeriods(ids);
 }

@@ -266,6 +266,36 @@ export async function setCustomerStatus(id: string, status: boolean): Promise<vo
   await repo.setCustomerStatus(id, status);
 }
 
+// --- Engine seam (C-14 / Phase 15) ------------------------------------------
+
+/** Greeting-eligible customers with the applicable date reduced to Jalali parts
+ *  (a NATURAL customer's birthDate, a LEGAL customer's foundingDate), for the
+ *  engine's once-a-year greeting. The engine matches month+day against today; the
+ *  BirthdayLog unique index guarantees at most one greeting per customer per year. */
+export async function listGreetingCandidates(): Promise<
+  {
+    customerId: string;
+    type: string;
+    fullName: string | null;
+    companyName: string | null;
+    mobile: string;
+    birth: { jy: number; jm: number; jd: number } | null;
+  }[]
+> {
+  const rows = await repo.findGreetingCandidates();
+  return rows.map((r) => {
+    const date = r.type === "LEGAL" ? r.foundingDate : r.birthDate;
+    return {
+      customerId: r.id,
+      type: r.type,
+      fullName: r.fullName,
+      companyName: r.companyName,
+      mobile: r.mobile,
+      birth: date ? toJalali(date) : null,
+    };
+  });
+}
+
 // --- Case-registration seams (C-4) -----------------------------------------
 
 /** True when the customer already has the birth/founding date its type needs. */

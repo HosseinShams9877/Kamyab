@@ -16,6 +16,7 @@ export {
   updateCustomer,
   setCustomerStatus,
   deleteCustomer,
+  listGreetingCandidates,
 } from "./customers.service";
 
 export {

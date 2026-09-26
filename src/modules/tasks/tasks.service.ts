@@ -284,3 +284,29 @@ export type { TaskWriteData } from "./tasks.repository";
 export function getTaskForAction(taskId: string) {
   return repo.findTaskForAction(taskId);
 }
+
+// --- Engine seams (C-14 / Phase 15) -----------------------------------------
+// The automatic engine archives long-closed tasks and alerts managers about
+// employees with many overdue tasks, through these seams (rule 9).
+
+/** Auto-archive every COMPLETED/CANCELLED task closed before the cutoff. */
+export function archiveClosedTasksBefore(cutoff: Date): Promise<number> {
+  return repo.archiveClosedTasksBefore(cutoff);
+}
+
+/** Owners with their current overdue-OPEN-task counts. Overdue = due before local
+ *  start-of-today (rule 2 — computed, never stored); `now` is injectable so a run
+ *  is deterministic. The engine applies the alert threshold + 24h anti-repeat. */
+export async function listOverdueOwners(
+  now: Date = new Date(),
+): Promise<{ ownerId: string; ownerName: string; count: number }[]> {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const rows = await repo.findOverdueOpenTasks(startOfToday);
+  const byOwner = new Map<string, { ownerId: string; ownerName: string; count: number }>();
+  for (const r of rows) {
+    const existing = byOwner.get(r.ownerId);
+    if (existing) existing.count += 1;
+    else byOwner.set(r.ownerId, { ownerId: r.ownerId, ownerName: r.ownerName, count: 1 });
+  }
+  return [...byOwner.values()];
+}
