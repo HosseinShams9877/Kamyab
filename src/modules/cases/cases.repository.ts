@@ -223,3 +223,89 @@ export async function caseMutationTx(args: CaseMutationTxArgs): Promise<void> {
     });
   });
 }
+
+// --- Cancellation & restore (C-8 / Phase 14) --------------------------------
+// Raw Case-row writes for the cancel/restore transactions, run on the caller's
+// tx inside caseMutationTx's `apply` (rule 4). caseMutationTx's own outer update
+// omits `status` when promoteFromNew is false, so the status set here survives.
+
+/** Mark a case CANCELLED and stamp who/why/when (C-8). Tx-aware. */
+export function setCaseCancelledTx(
+  tx: Prisma.TransactionClient,
+  args: { caseId: string; reasonId: string; note: string | null; cancelledById: string },
+): Promise<unknown> {
+  return tx.case.update({
+    where: { id: args.caseId },
+    data: {
+      status: "CANCELLED",
+      cancelledAt: new Date(),
+      cancellationReasonId: args.reasonId,
+      cancellationNote: args.note,
+      cancelledById: args.cancelledById,
+    },
+  });
+}
+
+/** Restore a cancelled case to IN_PROGRESS and clear the cancellation fields
+ *  (C-8). Tx-aware. */
+export function restoreCaseStatusTx(
+  tx: Prisma.TransactionClient,
+  caseId: string,
+): Promise<unknown> {
+  return tx.case.update({
+    where: { id: caseId },
+    data: {
+      status: "IN_PROGRESS",
+      cancelledAt: null,
+      cancellationReasonId: null,
+      cancellationNote: null,
+      cancelledById: null,
+    },
+  });
+}
+
+/** The cancellation detail for a case's header (C-8): when, why, note, and who —
+ *  reason title and canceller name joined. Null when the case does not exist. */
+export async function findCancellationDetail(caseId: string): Promise<{
+  cancelledAt: Date | null;
+  note: string | null;
+  reasonTitle: string | null;
+  cancelledByName: string | null;
+} | null> {
+  const row = await prisma.case.findUnique({
+    where: { id: caseId },
+    select: {
+      cancelledAt: true,
+      cancellationNote: true,
+      cancellationReason: { select: { title: true } },
+      cancelledBy: { select: { fullName: true } },
+    },
+  });
+  if (!row) return null;
+  return {
+    cancelledAt: row.cancelledAt,
+    note: row.cancellationNote,
+    reasonTitle: row.cancellationReason?.title ?? null,
+    cancelledByName: row.cancelledBy?.fullName ?? null,
+  };
+}
+
+/** Cancelled cases whose cancellation falls in [from, to) with their reason
+ *  title, for the cancellation report (B-5). Aggregation is done in the service
+ *  layer (a pure guard helper) so the report can be unit-tested. */
+export async function findCancellationsInRange(
+  from: Date,
+  to: Date,
+): Promise<{ reasonId: string | null; reasonTitle: string | null }[]> {
+  const rows = await prisma.case.findMany({
+    where: { status: "CANCELLED", cancelledAt: { gte: from, lt: to } },
+    select: {
+      cancellationReasonId: true,
+      cancellationReason: { select: { title: true } },
+    },
+  });
+  return rows.map((r) => ({
+    reasonId: r.cancellationReasonId,
+    reasonTitle: r.cancellationReason?.title ?? null,
+  }));
+}

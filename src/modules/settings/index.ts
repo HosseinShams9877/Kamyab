@@ -20,6 +20,7 @@ export {
   updateTemplate,
   getSmsStatus,
   listListItems,
+  listActiveCancellationReasons,
   createListItem,
   updateListItem,
   moveListItem,

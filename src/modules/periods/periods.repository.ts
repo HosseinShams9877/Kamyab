@@ -358,6 +358,20 @@ export async function findActivePeriod(
   });
 }
 
+/** A case's current (highest-index) period regardless of status, for case
+ *  restore (C-8): the period cancelled alongside the case is the current one, so
+ *  restore reactivates it only when it is CANCELLED. Null when the case has no
+ *  period at all. */
+export async function findCurrentPeriod(
+  caseId: string,
+): Promise<{ id: string; indexNumber: number; status: string } | null> {
+  return prisma.period.findFirst({
+    where: { caseId },
+    select: { id: true, indexNumber: true, status: true },
+    orderBy: { indexNumber: "desc" },
+  });
+}
+
 /** Update a period's follow-up status (and optionally its status) on the caller's
  *  transaction (rule 4). Driven by the record-result effect-on-renewal mapping
  *  (B-6): "not interested" also moves the period to ABANDONED. */

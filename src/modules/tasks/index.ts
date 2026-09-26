@@ -21,6 +21,8 @@ export {
   getTaskForAction,
   closeTaskTx,
   createTaskTx,
+  cancelOpenTasksForCaseTx,
+  countOpenTasksForCase,
 } from "./tasks.service";
 export type { TaskResult, TaskWriteData } from "./tasks.service";
 

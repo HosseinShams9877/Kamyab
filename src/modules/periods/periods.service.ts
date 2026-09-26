@@ -213,6 +213,14 @@ export function getActivePeriod(
   return repo.findActivePeriod(caseId);
 }
 
+/** A case's current (highest-index) period + its status, for case restore (C-8):
+ *  restore reactivates it only when it is CANCELLED. Null when there is none. */
+export function getCurrentPeriod(
+  caseId: string,
+): Promise<{ id: string; indexNumber: number; status: string } | null> {
+  return repo.findCurrentPeriod(caseId);
+}
+
 /** Update a period's follow-up status (and optionally status) on the caller's
  *  transaction (record-result effect-on-renewal, B-6). */
 export function setPeriodFollowUpTx(

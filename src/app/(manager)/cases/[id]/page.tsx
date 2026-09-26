@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/modules/auth";
 import { can } from "@/modules/permissions";
-import { getCasePage, CaseTabs, CASE_STATUS_LABELS, CASE_STATUS_BADGE, canEditStages, canAddStages, canRegisterRenewal, canRecordRenewalFollowUp, getRenewalMeta } from "@/modules/cases";
+import { getCasePage, CaseTabs, CASE_STATUS_LABELS, CASE_STATUS_BADGE, canEditStages, canAddStages, canRegisterRenewal, canRecordRenewalFollowUp, getRenewalMeta, canCancelCase, canRestoreCase, getCancellationDetail, CaseCancelDialog, CaseRestoreButton } from "@/modules/cases";
 import { periodPathTitle, PeriodsPanel } from "@/modules/periods";
+import { listActiveCancellationReasons } from "@/modules/settings";
+import { countOpenTasksForCase } from "@/modules/tasks";
 import {
   getCaseFinancial,
   canViewFinancial,
@@ -114,6 +116,21 @@ export default async function CaseDetailPage({
     />
   );
 
+  // Case cancellation & restore (C-8). Cancel is offered on an open case
+  // (NEW/IN_PROGRESS) to a user with `cases.cancel` scoped to the owner; restore
+  // is MANAGER ONLY on a cancelled case. The API routes + service re-check both
+  // (rule 3). The cancel dialog's warning summary is computed here: open stages
+  // (progress gap), open tasks (tasks module), and the current period's balance.
+  const cancellable = header.status === "NEW" || header.status === "IN_PROGRESS";
+  const canCancel = cancellable && canCancelCase(user, header.ownerId);
+  const canRestoreThis = isCancelled && canRestoreCase(user, user.role, header.ownerId);
+  const [cancelReasons, openTaskCount, cancellationDetail] = await Promise.all([
+    canCancel ? listActiveCancellationReasons() : Promise.resolve([]),
+    canCancel ? countOpenTasksForCase(header.id) : Promise.resolve(0),
+    isCancelled ? getCancellationDetail(header.id) : Promise.resolve(null),
+  ]);
+  const openStages = Math.max(header.progressTotal - header.progressPassed, 0);
+
   const daysText =
     header.daysRemaining === null
       ? "بدون تاریخ انقضا"
@@ -184,6 +201,53 @@ export default async function CaseDetailPage({
           </div>
         </dl>
       </section>
+
+      {/* Cancellation controls / detail (C-8). */}
+      {(canCancel || isCancelled) && (
+        <section className="mb-6 rounded-card border border-border bg-card p-4 shadow-card">
+          {isCancelled ? (
+            <div className="flex flex-col gap-3">
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                {cancellationDetail?.date && (
+                  <div className="flex gap-2">
+                    <dt className="text-text-secondary">تاریخ لغو</dt>
+                    <dd className="text-text" dir="ltr">
+                      {toPersianDigits(cancellationDetail.date)}
+                    </dd>
+                  </div>
+                )}
+                {cancellationDetail?.reasonTitle && (
+                  <div className="flex gap-2">
+                    <dt className="text-text-secondary">دلیل لغو</dt>
+                    <dd className="text-text">{cancellationDetail.reasonTitle}</dd>
+                  </div>
+                )}
+                {cancellationDetail?.cancelledByName && (
+                  <div className="flex gap-2">
+                    <dt className="text-text-secondary">لغوکننده</dt>
+                    <dd className="text-text">{cancellationDetail.cancelledByName}</dd>
+                  </div>
+                )}
+                {cancellationDetail?.note && (
+                  <div className="flex gap-2 sm:col-span-2">
+                    <dt className="text-text-secondary">یادداشت</dt>
+                    <dd className="text-text break-words">{cancellationDetail.note}</dd>
+                  </div>
+                )}
+              </dl>
+              {canRestoreThis && <CaseRestoreButton caseId={header.id} />}
+            </div>
+          ) : (
+            <CaseCancelDialog
+              caseId={header.id}
+              reasons={cancelReasons}
+              openStages={openStages}
+              openTasks={openTaskCount}
+              balance={current?.balance ?? null}
+            />
+          )}
+        </section>
+      )}
       {/* CARDS_AND_TABS */}
       {/* Two cards for the current period: the path (progress) and the money. */}
       {current ? (

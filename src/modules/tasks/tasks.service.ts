@@ -276,7 +276,8 @@ export async function deleteTask(user: Authorizable, taskId: string): Promise<Ta
 // is one transaction owned by cases.runCaseMutation and orchestrated by the
 // followups service. These re-exports let it drive the task writes without the
 // followups module importing this module's repository (rule 9).
-export { closeTaskTx, createTaskTx } from "./tasks.repository";
+export { closeTaskTx, createTaskTx, cancelOpenTasksForCaseTx } from "./tasks.repository";
+export { countOpenTasksForCase } from "./tasks.repository";
 export type { TaskWriteData } from "./tasks.repository";
 
 /** The task a record-result action targets (ownership + case + follow-up count). */

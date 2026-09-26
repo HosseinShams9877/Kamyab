@@ -299,6 +299,16 @@ export async function listListItems(kind: ListKind): Promise<ListItem[]> {
   }));
 }
 
+/** Active cancellation reasons as `{ id, title }` options for the cancel dialog
+ *  (C-8). The cancel service re-checks membership against this same list so a
+ *  request cannot cite a disabled or unknown reason (rule 3). */
+export async function listActiveCancellationReasons(): Promise<
+  { id: string; title: string }[]
+> {
+  const rows = await repoListItems("cancellationReasons");
+  return rows.filter((r) => r.active).map((r) => ({ id: r.id, title: r.title }));
+}
+
 export async function createListItem(
   kind: ListKind,
   input: { title: string; effectOnRenewal?: RenewalEffect },

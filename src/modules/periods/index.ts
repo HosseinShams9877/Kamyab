@@ -24,6 +24,7 @@ export {
   getPeriodCase,
   setPeriodTotalTx,
   getActivePeriod,
+  getCurrentPeriod,
   setPeriodFollowUpTx,
   getRenewablePeriod,
   getPeriodLifecycle,

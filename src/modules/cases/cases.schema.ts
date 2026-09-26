@@ -127,3 +127,30 @@ export const stageStructuralSchema = z.object({
 });
 
 export type StageStructuralInput = z.infer<typeof stageStructuralSchema>;
+
+// --- Cancellation & restore (C-8 / Phase 14) --------------------------------
+// Isomorphic: the cancel dialog and the cancel/restore API routes validate the
+// same objects, so a hand-crafted request cannot skip the reason requirement the
+// dialog enforces (rule 3). Whether the reason is *active* and whether the case
+// is in a cancellable state are business rules the service owns.
+
+/** Cancel a case (C-8): a mandatory active reason + an optional note (≤ 500). */
+export const caseCancelSchema = z.object({
+  caseId: requiredId("شناسهٔ پرونده الزامی است."),
+  cancellationReasonId: requiredId("انتخاب دلیل لغو الزامی است."),
+  note: z
+    .string()
+    .trim()
+    .max(500, { message: "حداکثر ۵۰۰ نویسه مجاز است." })
+    .optional()
+    .or(z.literal("")),
+});
+
+export type CaseCancelInput = z.infer<typeof caseCancelSchema>;
+
+/** Restore a cancelled case (C-8, manager only — the role gate is server-side). */
+export const caseRestoreSchema = z.object({
+  caseId: requiredId("شناسهٔ پرونده الزامی است."),
+});
+
+export type CaseRestoreInput = z.infer<typeof caseRestoreSchema>;

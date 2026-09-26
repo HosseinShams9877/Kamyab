@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import {
   parseJalali,
   toGregorianDate,
+  toJalali,
+  formatJalali,
   addMonths,
   todayJalali,
 } from "@/lib/jalali";
@@ -9,7 +11,7 @@ import { getService, listActiveServiceOptions } from "@/modules/services";
 import { getServicePaths, listDurations } from "@/modules/paths";
 import { listActiveCustomerOptions, saveCaseBirthInfoTx } from "@/modules/customers";
 import { listCaseOwnerOptions } from "@/modules/employees";
-import { getThresholds } from "@/modules/settings";
+import { getThresholds, listActiveCancellationReasons } from "@/modules/settings";
 import { can, type Authorizable } from "@/modules/permissions";
 import {
   createRegistrationPeriodTx,
@@ -22,6 +24,8 @@ import {
   addExceptionalStageTx,
   deleteStageTx,
   moveStageTx,
+  getActivePeriod,
+  getCurrentPeriod,
   getRenewablePeriod,
   getPeriodLifecycle,
   renewPeriodTx,
@@ -44,9 +48,15 @@ import {
   type RenewalFollowUpInput,
   type PeriodActionInput,
 } from "@/modules/periods";
-import type { CustomerType, CaseStatus } from "@/types/enums";
+import type { CustomerType, CaseStatus, Role } from "@/types/enums";
 import * as repo from "./cases.repository";
-import type { CaseCreateInput, StageActionInput, AddStageInput } from "./cases.schema";
+import type {
+  CaseCreateInput,
+  StageActionInput,
+  AddStageInput,
+  CaseCancelInput,
+  CaseRestoreInput,
+} from "./cases.schema";
 import {
   CUSTOMER_INVALID,
   SERVICE_INVALID,
@@ -62,9 +72,17 @@ import {
   STAGE_DELETE_NOT_EXCEPTIONAL,
   STAGE_DELETE_HAS_ACTION,
   STAGE_MOVE_NOT_EXCEPTIONAL,
+  CANCEL_FORBIDDEN,
+  RESTORE_FORBIDDEN,
+  ALREADY_CANCELLED,
+  CANNOT_CANCEL_COMPLETED,
+  NOT_CANCELLED,
+  CANCEL_REASON_INVALID,
+  aggregateCancellations,
   isStageActionAllowed,
   stageHasRecordedAction,
   daysRemainingUntil,
+  type CancellationReport,
 } from "./cases.guards";
 import type {
   CaseFormData,
@@ -783,4 +801,172 @@ export async function restorePeriod(
     historyDetail: JSON.stringify({ periodId: input.periodId, indexNumber: lifecycle.indexNumber }),
   });
   return { ok: true };
+}
+
+// --- Case cancellation & restore (C-8 / Phase 14) ---------------------------
+// Cancelling a case is a case-level write that fans out across three modules in
+// ONE transaction (rule 4): the Case row (status + who/why/when), its active
+// period (→ CANCELLED, via the periods seam), and every open task of the case
+// (→ CANCELLED + a notification per owner, via the tasks seam). The tasks seam is
+// INJECTED by the API route rather than imported here: tasks already depends on
+// cases (listActiveCaseOptions), so a cases→tasks import would cycle (rule 9).
+// The path is "locked" purely as a consequence of CANCELLED status — the stage
+// service already 409s on a cancelled case, so no stage write is needed here.
+// Payments, the total and the balance are deliberately left untouched, and the
+// case is never deleted (it stays in search, customer history and reports).
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The tasks-module seam the cancel transaction injects (see the note above). */
+type CancelOpenTasksTxFn = (
+  tx: Prisma.TransactionClient,
+  args: { caseId: string; message: string },
+) => Promise<void>;
+
+type CancelRestoreResult =
+  | { ok: true }
+  | { ok: false; code: 403 | 404 | 409 | 422; message: string };
+
+/** May the user cancel this case? `cases.cancel` scoped by `cases.edit` on the
+ *  owner (rule 3) — the API route re-checks; the page uses it to show the button. */
+export function canCancelCase(user: Authorizable, ownerId: string): boolean {
+  return can(user, "cases.cancel") && can(user, "cases.edit", { ownerId });
+}
+
+/** May the user restore this cancelled case? MANAGER ONLY (C-8) — SUPERVISOR
+ *  holds `cases.restore` by default, so the role gate is the defining rule. */
+export function canRestoreCase(user: Authorizable, role: Role, ownerId: string): boolean {
+  return role === "MANAGER" && can(user, "cases.restore") && can(user, "cases.edit", { ownerId });
+}
+
+/** The cancellation detail for a cancelled case's header (C-8): the Jalali date
+ *  (ASCII "YYYY/MM/DD" — the page applies Persian digits), reason title, note and
+ *  canceller name. Null when the case does not exist. */
+export async function getCancellationDetail(caseId: string): Promise<{
+  date: string | null;
+  reasonTitle: string | null;
+  note: string | null;
+  cancelledByName: string | null;
+} | null> {
+  const d = await repo.findCancellationDetail(caseId);
+  if (!d) return null;
+  return {
+    date: d.cancelledAt ? formatJalali(toJalali(d.cancelledAt), { persianDigits: false }) : null,
+    reasonTitle: d.reasonTitle,
+    note: d.note,
+    cancelledByName: d.cancelledByName,
+  };
+}
+
+/**
+ * Cancel a case (C-8). Authorizes (record-scoped), blocks an already-cancelled or
+ * completed case, and re-validates the reason against the active list (rule 3).
+ * Then, in one transaction: mark the case CANCELLED with who/why/when, cancel its
+ * active period, and cancel + notify every open task (the injected tasks seam),
+ * plus the case last-activity bump and a history record. The Persian task
+ * notification text is built here (never in the repository/seam).
+ */
+export async function cancelCase(
+  user: Authorizable,
+  input: CaseCancelInput,
+  cancelOpenTasksTx: CancelOpenTasksTxFn,
+): Promise<CancelRestoreResult> {
+  const kase = await repo.findCaseForStage(input.caseId);
+  if (!kase) return { ok: false, code: 404, message: CASE_NOT_FOUND };
+  if (!canCancelCase(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: CANCEL_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: ALREADY_CANCELLED };
+  }
+  if (kase.status === "COMPLETED") {
+    return { ok: false, code: 409, message: CANNOT_CANCEL_COMPLETED };
+  }
+
+  const reasons = await listActiveCancellationReasons();
+  const reason = reasons.find((r) => r.id === input.cancellationReasonId);
+  if (!reason) return { ok: false, code: 422, message: CANCEL_REASON_INVALID };
+
+  const note = input.note && input.note.trim() ? input.note.trim() : null;
+  const active = await getActivePeriod(input.caseId);
+  const taskMessage = `پروندهٔ ${kase.number} لغو شد؛ کارهای باز آن بسته شدند.`;
+
+  await repo.caseMutationTx({
+    caseId: input.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: async (tx) => {
+      await repo.setCaseCancelledTx(tx, {
+        caseId: input.caseId,
+        reasonId: input.cancellationReasonId,
+        note,
+        cancelledById: user.id,
+      });
+      if (active) await setPeriodStatusTx(tx, active.id, "CANCELLED");
+      await cancelOpenTasksTx(tx, { caseId: input.caseId, message: taskMessage });
+    },
+    historyAction: "case.cancelled",
+    historyDetail: JSON.stringify({
+      reasonId: input.cancellationReasonId,
+      reasonTitle: reason.title,
+      ...(note ? { note } : {}),
+    }),
+  });
+  return { ok: true };
+}
+
+/**
+ * Restore a cancelled case (C-8) — MANAGER ONLY. Sets the case back to
+ * IN_PROGRESS (clearing the cancellation fields) and reactivates the period that
+ * was cancelled alongside it (the current, highest-index one, only if CANCELLED),
+ * in one transaction with the history record.
+ */
+export async function restoreCase(
+  user: Authorizable,
+  role: Role,
+  input: CaseRestoreInput,
+): Promise<CancelRestoreResult> {
+  const kase = await repo.findCaseForStage(input.caseId);
+  if (!kase) return { ok: false, code: 404, message: CASE_NOT_FOUND };
+  if (!canRestoreCase(user, role, kase.ownerId)) {
+    return { ok: false, code: 403, message: RESTORE_FORBIDDEN };
+  }
+  if (kase.status !== "CANCELLED") {
+    return { ok: false, code: 409, message: NOT_CANCELLED };
+  }
+
+  const current = await getCurrentPeriod(input.caseId);
+  await repo.caseMutationTx({
+    caseId: input.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: async (tx) => {
+      await repo.restoreCaseStatusTx(tx, input.caseId);
+      if (current && current.status === "CANCELLED") {
+        await setPeriodStatusTx(tx, current.id, "ACTIVE");
+      }
+    },
+    historyAction: "case.restored",
+    historyDetail: JSON.stringify({ caseId: input.caseId }),
+  });
+  return { ok: true };
+}
+
+/**
+ * The cancellation report (B-5): count of cancelled cases in a Jalali date range,
+ * broken down by reason (desc by count). The `to` day is inclusive (the query ends
+ * at the next midnight). Returns null when either bound is not a valid Jalali date
+ * (the page validates first and falls back to a default range).
+ */
+export async function getCancellationReport(
+  fromStr: string,
+  toStr: string,
+): Promise<CancellationReport | null> {
+  const fromJ = parseJalali(fromStr);
+  const toJ = parseJalali(toStr);
+  if (!fromJ || !toJ) return null;
+  const from = toGregorianDate(fromJ);
+  const to = new Date(toGregorianDate(toJ).getTime() + DAY_MS);
+  const rows = await repo.findCancellationsInRange(from, to);
+  return aggregateCancellations(rows);
 }

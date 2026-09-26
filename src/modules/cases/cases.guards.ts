@@ -39,6 +39,45 @@ export const STAGE_DELETE_HAS_ACTION =
   "مرحله‌ای که روی آن اقدامی ثبت شده حذف نمی‌شود؛ آن را «نیازی نیست» کنید.";
 export const STAGE_MOVE_NOT_EXCEPTIONAL = "فقط مرحلهٔ استثنائی جابه‌جا می‌شود.";
 
+// --- Cancellation & restore messages (C-8) ----------------------------------
+export const CANCEL_FORBIDDEN = "شما مجاز به لغو این پرونده نیستید.";
+export const RESTORE_FORBIDDEN = "بازگرداندن پرونده فقط توسط مدیر امکان‌پذیر است.";
+export const ALREADY_CANCELLED = "این پرونده پیش‌تر لغو شده است.";
+export const CANNOT_CANCEL_COMPLETED = "پروندهٔ تکمیل‌شده قابل لغو نیست.";
+export const NOT_CANCELLED = "این پرونده لغو نشده است.";
+export const CANCEL_REASON_INVALID = "دلیل لغو انتخاب‌شده معتبر نیست.";
+
+// --- Cancellation report (C-8 / B-5) ----------------------------------------
+// Pure aggregation of a date-range's cancelled cases into per-reason counts,
+// shared shape for the report page. Kept here (isomorphic leaf) so it is unit-
+// tested without Prisma; the service maps its rows into `CancellationRow[]`.
+
+/** One cancelled case reduced to its reason (title resolved, id kept for keys). */
+export type CancellationRow = { reasonId: string | null; reasonTitle: string | null };
+
+/** A single reason's tally in the report. */
+export type CancellationReasonCount = { title: string; count: number };
+
+/** The cancellation report: overall total + per-reason counts (desc by count). */
+export type CancellationReport = { total: number; byReason: CancellationReasonCount[] };
+
+/** Label for cases whose reason row was later removed (id present, title null). */
+export const NO_REASON_LABEL = "بدون دلیل ثبت‌شده";
+
+/** Tally cancelled-case rows by reason title, most frequent first (ties by title
+ *  so the order is stable). Pure — the report page and its test both use it. */
+export function aggregateCancellations(rows: CancellationRow[]): CancellationReport {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const title = r.reasonTitle ?? NO_REASON_LABEL;
+    counts.set(title, (counts.get(title) ?? 0) + 1);
+  }
+  const byReason = [...counts.entries()]
+    .map(([title, count]) => ({ title, count }))
+    .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
+  return { total: rows.length, byReason };
+}
+
 // Open = still on the path; closed = finished (Done / Not-Needed).
 const OPEN_STATUSES: StageStatus[] = ["PENDING", "IN_PROGRESS", "REJECTED"];
 

@@ -75,6 +75,35 @@ export async function findTaskForAction(taskId: string): Promise<
 
 // APPEND_MARKER
 
+/** Cancel every OPEN task of a case and notify each distinct owner (C-8). Part of
+ *  the case-cancellation transaction (rule 4), so it is tx-aware and takes the
+ *  ready-built Persian `message` (the cases service owns the text — this layer
+ *  never composes Persian). Owners are de-duplicated so a person owning several
+ *  of the case's tasks is notified once. No-op when nothing is open. */
+export async function cancelOpenTasksForCaseTx(
+  tx: Prisma.TransactionClient,
+  args: { caseId: string; message: string },
+): Promise<void> {
+  const open = await tx.task.findMany({
+    where: { caseId: args.caseId, status: "OPEN" },
+    select: { ownerId: true },
+  });
+  if (open.length === 0) return;
+  await tx.task.updateMany({
+    where: { caseId: args.caseId, status: "OPEN" },
+    data: { status: "CANCELLED", closedAt: new Date() },
+  });
+  const ownerIds = [...new Set(open.map((t) => t.ownerId))];
+  await tx.notification.createMany({
+    data: ownerIds.map((userId) => ({ userId, message: args.message })),
+  });
+}
+
+/** How many OPEN tasks a case has, for the cancel dialog's warning summary (C-8). */
+export function countOpenTasksForCase(caseId: string): Promise<number> {
+  return prisma.task.count({ where: { caseId, status: "OPEN" } });
+}
+
 /** The data a task write needs (dates already converted to `Date`). */
 export type TaskWriteData = {
   title: string;
