@@ -5,17 +5,14 @@ import { toPersianDigits } from "@/lib/digits";
 import { formatToman } from "@/lib/money";
 // Isomorphic leaf imports (client-component exception): never the periods barrel.
 import type { PeriodRow } from "@/modules/periods/periods.types";
-import {
-  STAGE_STATUS_LABELS,
-  STAGE_STATUS_BADGE,
-  PERIOD_STATUS_LABELS,
-} from "@/modules/periods/lib/labels";
+import { PERIOD_STATUS_LABELS } from "@/modules/periods/lib/labels";
+import { CaseStages } from "./case-stages";
 
-// The five case-page tabs (C-5). Phase 9 is a read-only shell: the Stages tab
-// lists the current period's copied stages with their status (the six stage
-// ACTIONS arrive with the stage engine, C-6 / Phase 10); the Periods tab lists
-// every validity span; Tasks, Payments, and History show a "later phase"
-// placeholder so the frame is complete without pretending the data exists yet.
+// The five case-page tabs (C-5). The Stages tab hosts the interactive stage
+// engine (C-6 / Phase 10 — the strip, current-stage line, the six actions, and
+// exceptional stages); the Periods tab lists every validity span; Tasks,
+// Payments, and History show a "later phase" placeholder so the frame is
+// complete without pretending the data exists yet.
 
 type TabKey = "stages" | "tasks" | "periods" | "payments" | "history";
 
@@ -34,9 +31,15 @@ const placeholderClass =
 export function CaseTabs({
   current,
   periods,
+  canEdit,
+  canAddStage,
+  isCancelled,
 }: {
   current: PeriodRow | null;
   periods: PeriodRow[];
+  canEdit: boolean;
+  canAddStage: boolean;
+  isCancelled: boolean;
 }) {
   const [active, setActive] = useState<TabKey>("stages");
 
@@ -68,7 +71,15 @@ export function CaseTabs({
         })}
       </div>
 
-      {active === "stages" && <StagesPanel current={current} />}
+      {active === "stages" && (
+        <CaseStages
+          stages={current?.stages ?? []}
+          periodId={current?.id ?? null}
+          canEdit={canEdit}
+          canAddStage={canAddStage}
+          isCancelled={isCancelled}
+        />
+      )}
       {active === "periods" && <PeriodsPanel periods={periods} />}
       {active === "tasks" && (
         <div className={placeholderClass}>کارها در فاز بعدی افزوده می‌شود.</div>
@@ -85,44 +96,6 @@ export function CaseTabs({
   );
 }
 // HELPERS_PLACEHOLDER
-
-// Stages tab: the current period's copied stages, read-only. Ordered by the
-// path order; a stage flagged exceptional carries a small caption.
-function StagesPanel({ current }: { current: PeriodRow | null }) {
-  if (!current || current.stages.length === 0) {
-    return (
-      <div className={placeholderClass}>
-        برای این پرونده مرحله‌ای تعریف نشده است.
-      </div>
-    );
-  }
-  const stages = [...current.stages].sort((a, b) => a.order - b.order);
-  return (
-    <ul className="space-y-2">
-      {stages.map((stage) => (
-        <li
-          key={stage.id}
-          className="flex items-center justify-between gap-3 rounded-card border border-border bg-card p-3 shadow-card"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-text-secondary">
-              {toPersianDigits(String(stage.order))}.
-            </span>
-            <span className="text-sm text-text">{stage.title}</span>
-            {stage.isExceptional && (
-              <span className={`${badgeClass} bg-info-bg text-info`}>
-                استثنائی
-              </span>
-            )}
-          </div>
-          <span className={`${badgeClass} ${STAGE_STATUS_BADGE[stage.status]}`}>
-            {STAGE_STATUS_LABELS[stage.status]}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 // Periods tab: every validity span of the case, newest concerns first left as
 // natural (indexNumber) order. Financial figures are read-time computed (rule 2).

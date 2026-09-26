@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/modules/auth";
 import { can } from "@/modules/permissions";
-import { getCasePage, CaseTabs, CASE_STATUS_LABELS, CASE_STATUS_BADGE } from "@/modules/cases";
+import { getCasePage, CaseTabs, CASE_STATUS_LABELS, CASE_STATUS_BADGE, canEditStages, canAddStages } from "@/modules/cases";
 import { periodPathTitle } from "@/modules/periods";
 import { toPersianDigits } from "@/lib/digits";
 import { formatToman } from "@/lib/money";
@@ -27,6 +27,13 @@ export default async function CaseDetailPage({
   if (!page) notFound();
 
   const { header, periods, current } = page;
+
+  // Server-side authorization for the stage engine (rule 3): the same booleans
+  // gate the API routes. They decide only whether the buttons are shown; the
+  // routes re-check on every request.
+  const canEdit = canEditStages(user, header.ownerId);
+  const canAddStage = canAddStages(user, header.ownerId);
+  const isCancelled = header.status === "CANCELLED";
 
   const daysText =
     header.daysRemaining === null
@@ -135,7 +142,13 @@ export default async function CaseDetailPage({
         </div>
       )}
 
-      <CaseTabs current={current} periods={periods} />
+      <CaseTabs
+        current={current}
+        periods={periods}
+        canEdit={canEdit}
+        canAddStage={canAddStage}
+        isCancelled={isCancelled}
+      />
     </main>
   );
 }

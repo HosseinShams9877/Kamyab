@@ -132,3 +132,58 @@ export async function ownerIsActive(id: string): Promise<boolean> {
   });
   return row?.status === true;
 }
+
+// --- Stage engine (C-6 / Phase 10) ------------------------------------------
+
+/** The case fields a stage action needs: ownership (authorization) + status
+ *  (blocked-when-cancelled, NEW→IN_PROGRESS promotion). Null when absent. */
+export async function findCaseForStage(
+  caseId: string,
+): Promise<{ id: string; number: string; status: string; ownerId: string } | null> {
+  return prisma.case.findUnique({
+    where: { id: caseId },
+    select: { id: true, number: true, status: true, ownerId: true },
+  });
+}
+
+export type StageMutationTxArgs = {
+  caseId: string;
+  actorId: string;
+  /** Whether the case was NEW and should be promoted to IN_PROGRESS (C-6 side
+   *  effect #3 — only the five status transitions promote). */
+  promoteFromNew: boolean;
+  /** The periods-owned write (transition / add / delete / move), injected so
+   *  this repository never touches the Period/CaseStage tables (rule 9). */
+  apply: (tx: Prisma.TransactionClient) => Promise<void>;
+  historyAction: string;
+  historyDetail: string;
+};
+
+/**
+ * Run a stage mutation + its case-level side effects in one transaction (rule
+ * 4): the injected periods write, then the case's last-activity bump (C-6 side
+ * effect #2) and optional NEW→IN_PROGRESS promotion (#3), then the history
+ * record (#4). The "current stage" (#1) is computed at read time (rule 2) — the
+ * Case has no such column, so there is nothing to write for it.
+ */
+export async function stageMutationTx(args: StageMutationTxArgs): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await args.apply(tx);
+    await tx.case.update({
+      where: { id: args.caseId },
+      data: {
+        lastActivityAt: new Date(),
+        ...(args.promoteFromNew ? { status: "IN_PROGRESS" } : {}),
+      },
+    });
+    await tx.activityHistory.create({
+      data: {
+        entityType: "Case",
+        entityId: args.caseId,
+        action: args.historyAction,
+        actorId: args.actorId,
+        detail: args.historyDetail,
+      },
+    });
+  });
+}

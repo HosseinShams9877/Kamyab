@@ -10,12 +10,28 @@ export {
   getServiceCaseMeta,
   registerCase,
   getCasePage,
+  runStageAction,
+  addExceptionalStage,
+  deleteStage,
+  moveStage,
+  canEditStages,
+  canAddStages,
 } from "./cases.service";
 export type { CasePage } from "./cases.service";
 
 // --- Schema (isomorphic) ----------------------------------------------------
-export { caseCreateSchema } from "./cases.schema";
-export type { CaseCreateInput } from "./cases.schema";
+export {
+  caseCreateSchema,
+  stageActionSchema,
+  addStageSchema,
+  stageStructuralSchema,
+} from "./cases.schema";
+export type {
+  CaseCreateInput,
+  StageActionInput,
+  AddStageInput,
+  StageStructuralInput,
+} from "./cases.schema";
 
 // --- Types (isomorphic) -----------------------------------------------------
 export type {

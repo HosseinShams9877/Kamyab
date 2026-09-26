@@ -1,4 +1,6 @@
 import { parseJalali, toGregorianDate } from "@/lib/jalali";
+import type { StageStatus } from "@/types/enums";
+import type { StageActionOp } from "@/modules/periods/periods.types";
 
 // Pure domain rules + Persian messages for the cases module (C-4 registration,
 // C-5 page). Isomorphic leaf: no Prisma, no server-only imports — the client
@@ -25,6 +27,45 @@ export const NO_DURATION_DEFINED =
   "برای این خدمت مدت اعتباری تعریف نشده است.";
 export const DURATION_REQUIRED = "انتخاب مدت اعتبار الزامی است.";
 export const DURATION_INVALID = "مدت اعتبار انتخاب‌شده معتبر نیست.";
+
+// --- Stage engine messages (C-6) --------------------------------------------
+export const CASE_CANCELLED = "پرونده لغو شده است.";
+export const STAGE_NOT_FOUND = "مرحله یافت نشد.";
+export const STAGE_FORBIDDEN = "شما مجاز به این اقدام نیستید.";
+export const STAGE_INVALID_TRANSITION = "این اقدام برای وضعیت فعلی مرحله مجاز نیست.";
+export const STAGE_REJECT_NOTE_REQUIRED = "ثبت یادداشت برای رد مرحله الزامی است.";
+export const STAGE_DELETE_NOT_EXCEPTIONAL = "فقط مرحلهٔ استثنائی قابل حذف است.";
+export const STAGE_DELETE_HAS_ACTION =
+  "مرحله‌ای که روی آن اقدامی ثبت شده حذف نمی‌شود؛ آن را «نیازی نیست» کنید.";
+export const STAGE_MOVE_NOT_EXCEPTIONAL = "فقط مرحلهٔ استثنائی جابه‌جا می‌شود.";
+
+// Open = still on the path; closed = finished (Done / Not-Needed).
+const OPEN_STATUSES: StageStatus[] = ["PENDING", "IN_PROGRESS", "REJECTED"];
+
+/** Whether a C-6 status transition is legal for the stage's current status
+ *  (pure — the same check runs client-side for button visibility and
+ *  server-side as the real gate). */
+export function isStageActionAllowed(op: StageActionOp, status: StageStatus): boolean {
+  const isOpen = OPEN_STATUSES.includes(status);
+  switch (op) {
+    case "start":
+      return status === "PENDING";
+    case "done":
+    case "reject":
+    case "not_needed":
+      return isOpen;
+    case "reopen":
+      return !isOpen; // DONE | NOT_NEEDED
+    case "note":
+      return true; // always available
+  }
+}
+
+/** A stage carries a recorded action once it has left PENDING or been attempted;
+ *  such a stage can no longer be deleted (only set to Not-Needed) — C-6. */
+export function stageHasRecordedAction(status: StageStatus, attemptCount: number): boolean {
+  return status !== "PENDING" || attemptCount > 0;
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -9,17 +9,24 @@ import { getService, listActiveServiceOptions } from "@/modules/services";
 import { getServicePaths, listDurations } from "@/modules/paths";
 import { listActiveCustomerOptions, saveCaseBirthInfoTx } from "@/modules/customers";
 import { listCaseOwnerOptions } from "@/modules/employees";
+import { can, type Authorizable } from "@/modules/permissions";
 import {
   createRegistrationPeriodTx,
   getPeriodsForCase,
   currentPeriod,
   stageProgress,
+  getStageForAction,
+  getPeriodForStageAdd,
+  applyStageActionTx,
+  addExceptionalStageTx,
+  deleteStageTx,
+  moveStageTx,
   type PeriodRow,
   type StageTemplate,
 } from "@/modules/periods";
 import type { CustomerType, CaseStatus } from "@/types/enums";
 import * as repo from "./cases.repository";
-import type { CaseCreateInput } from "./cases.schema";
+import type { CaseCreateInput, StageActionInput, AddStageInput } from "./cases.schema";
 import {
   CUSTOMER_INVALID,
   SERVICE_INVALID,
@@ -27,6 +34,16 @@ import {
   NO_DURATION_DEFINED,
   DURATION_REQUIRED,
   DURATION_INVALID,
+  CASE_CANCELLED,
+  STAGE_NOT_FOUND,
+  STAGE_FORBIDDEN,
+  STAGE_INVALID_TRANSITION,
+  STAGE_REJECT_NOTE_REQUIRED,
+  STAGE_DELETE_NOT_EXCEPTIONAL,
+  STAGE_DELETE_HAS_ACTION,
+  STAGE_MOVE_NOT_EXCEPTIONAL,
+  isStageActionAllowed,
+  stageHasRecordedAction,
   daysRemainingUntil,
 } from "./cases.guards";
 import type {
@@ -274,4 +291,167 @@ export async function getCasePage(id: string): Promise<CasePage | null> {
   };
 
   return { header, periods, current };
+}
+
+// --- Stage engine (C-6 / Phase 10) ------------------------------------------
+// Authorization is server-side (rule 3): the status transitions need
+// `stages.advance`, the structural ops (add / delete / reorder an exceptional
+// stage) need `stages.add_exceptional`, and BOTH are scoped to the case via
+// `cases.edit` on the case record — an employee may act only on their own
+// cases unless they hold cases.view_all. The page computes the same booleans to
+// show/hide buttons; these functions are the real gate a direct request hits.
+
+/** May the user run the six stage actions on this case? */
+export function canEditStages(user: Authorizable, ownerId: string): boolean {
+  return can(user, "stages.advance") && can(user, "cases.edit", { ownerId });
+}
+
+/** May the user add / delete / reorder an exceptional stage on this case? */
+export function canAddStages(user: Authorizable, ownerId: string): boolean {
+  return can(user, "stages.add_exceptional") && can(user, "cases.edit", { ownerId });
+}
+
+type StageResult = { ok: true } | { ok: false; code: 403 | 404 | 409; message: string };
+
+/** Transition ops (start/done/reject/not_needed/reopen) promote a NEW case to
+ *  IN_PROGRESS; a note edit does not (no stage progressed). */
+const PROMOTING_OPS = new Set(["start", "done", "reject", "not_needed", "reopen"]);
+
+/**
+ * Run one of the six stage actions (C-6). Reads the stage's state + its owning
+ * case, authorizes, blocks a cancelled case, validates the transition, then
+ * applies the mutation and every side effect in one transaction (rule 4).
+ */
+export async function runStageAction(
+  user: Authorizable,
+  stageId: string,
+  input: StageActionInput,
+): Promise<StageResult> {
+  const ctx = await getStageForAction(stageId);
+  if (!ctx) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+  const kase = await repo.findCaseForStage(ctx.caseId);
+  if (!kase) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+
+  if (!canEditStages(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: STAGE_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: CASE_CANCELLED };
+  }
+  if (!isStageActionAllowed(input.op, ctx.status)) {
+    return { ok: false, code: 409, message: STAGE_INVALID_TRANSITION };
+  }
+  if (input.op === "reject" && !(input.note && input.note.trim())) {
+    return { ok: false, code: 409, message: STAGE_REJECT_NOTE_REQUIRED };
+  }
+
+  const note = input.note && input.note.trim() ? input.note.trim() : null;
+  await repo.stageMutationTx({
+    caseId: ctx.caseId,
+    actorId: user.id,
+    promoteFromNew: kase.status === "NEW" && PROMOTING_OPS.has(input.op),
+    apply: (tx) => applyStageActionTx(tx, { stageId, op: input.op, note, actorId: user.id }),
+    historyAction: `stage.${input.op}`,
+    historyDetail: JSON.stringify({
+      stageId,
+      title: ctx.title,
+      op: input.op,
+      ...(note ? { note } : {}),
+    }),
+  });
+  return { ok: true };
+}
+
+/** Add an exceptional stage to the case's current period (C-6). */
+export async function addExceptionalStage(
+  user: Authorizable,
+  input: AddStageInput,
+): Promise<StageResult> {
+  const period = await getPeriodForStageAdd(input.periodId);
+  if (!period) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+  const kase = await repo.findCaseForStage(period.caseId);
+  if (!kase) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+
+  if (!canAddStages(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: STAGE_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: CASE_CANCELLED };
+  }
+
+  const title = input.title.trim();
+  await repo.stageMutationTx({
+    caseId: period.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) => addExceptionalStageTx(tx, { periodId: input.periodId, title, actorId: user.id }),
+    historyAction: "stage.added",
+    historyDetail: JSON.stringify({ title, periodId: input.periodId }),
+  });
+  return { ok: true };
+}
+
+/** Delete an exceptional, never-acted stage (C-6: an acted stage can only be set
+ *  to Not-Needed). */
+export async function deleteStage(user: Authorizable, stageId: string): Promise<StageResult> {
+  const ctx = await getStageForAction(stageId);
+  if (!ctx) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+  const kase = await repo.findCaseForStage(ctx.caseId);
+  if (!kase) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+
+  if (!canAddStages(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: STAGE_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: CASE_CANCELLED };
+  }
+  if (!ctx.isExceptional) {
+    return { ok: false, code: 409, message: STAGE_DELETE_NOT_EXCEPTIONAL };
+  }
+  if (stageHasRecordedAction(ctx.status, ctx.attemptCount)) {
+    return { ok: false, code: 409, message: STAGE_DELETE_HAS_ACTION };
+  }
+
+  await repo.stageMutationTx({
+    caseId: ctx.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) => deleteStageTx(tx, stageId),
+    historyAction: "stage.deleted",
+    historyDetail: JSON.stringify({ stageId, title: ctx.title }),
+  });
+  return { ok: true };
+}
+
+/** Reorder an exceptional stage one position (C-6: exceptional stages are
+ *  reorderable; the defined path order stays fixed). */
+export async function moveStage(
+  user: Authorizable,
+  stageId: string,
+  direction: "up" | "down",
+): Promise<StageResult> {
+  const ctx = await getStageForAction(stageId);
+  if (!ctx) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+  const kase = await repo.findCaseForStage(ctx.caseId);
+  if (!kase) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+
+  if (!canAddStages(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: STAGE_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: CASE_CANCELLED };
+  }
+  if (!ctx.isExceptional) {
+    return { ok: false, code: 409, message: STAGE_MOVE_NOT_EXCEPTIONAL };
+  }
+
+  await repo.stageMutationTx({
+    caseId: ctx.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) => moveStageTx(tx, { stageId, direction }),
+    historyAction: "stage.reordered",
+    historyDetail: JSON.stringify({ stageId, direction }),
+  });
+  return { ok: true };
 }

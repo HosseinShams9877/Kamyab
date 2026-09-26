@@ -16,6 +16,12 @@ export {
   currentPeriod,
   stageProgress,
   createRegistrationPeriodTx,
+  getStageForAction,
+  getPeriodForStageAdd,
+  applyStageActionTx,
+  addExceptionalStageTx,
+  deleteStageTx,
+  moveStageTx,
 } from "./periods.service";
 
 // --- Types (isomorphic) -----------------------------------------------------
@@ -24,6 +30,11 @@ export type {
   PeriodRow,
   StageTemplate,
   RegistrationPeriodInput,
+  StageActionOp,
+  StageActionContext,
+  ApplyStageActionArgs,
+  AddExceptionalStageArgs,
+  MoveStageArgs,
 } from "./periods.types";
 
 // --- Presentation labels (isomorphic) ---------------------------------------

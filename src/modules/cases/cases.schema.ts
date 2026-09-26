@@ -84,3 +84,46 @@ export const caseCreateSchema = z.object({
 });
 
 export type CaseCreateInput = z.infer<typeof caseCreateSchema>;
+
+// --- Stage engine (C-6 / Phase 10) ------------------------------------------
+// Isomorphic: the client stage engine and the stage API routes validate against
+// the same objects, so a hand-crafted request cannot skip a rule (rule 3).
+
+/** A stage action: the five status transitions + the note edit. `note` is
+ *  mandatory for Reject (C-6) and is the text written/cleared for Note. */
+export const stageActionSchema = z
+  .object({
+    op: z.enum(["start", "done", "reject", "not_needed", "reopen", "note"]),
+    note: z
+      .string()
+      .trim()
+      .max(1000, { message: "حداکثر ۱۰۰۰ نویسه مجاز است." })
+      .optional()
+      .or(z.literal("")),
+  })
+  .refine((d) => d.op !== "reject" || (d.note !== undefined && d.note.trim() !== ""), {
+    message: "ثبت یادداشت برای رد مرحله الزامی است.",
+    path: ["note"],
+  });
+
+export type StageActionInput = z.infer<typeof stageActionSchema>;
+
+/** Add an exceptional stage to a case's current period (C-6). */
+export const addStageSchema = z.object({
+  periodId: z.string().trim().min(1),
+  title: z
+    .string()
+    .trim()
+    .min(1, { message: "عنوان مرحله الزامی است." })
+    .max(200, { message: "حداکثر ۲۰۰ نویسه مجاز است." }),
+});
+
+export type AddStageInput = z.infer<typeof addStageSchema>;
+
+/** Reorder or delete an exceptional stage (C-6). A separate structural op from
+ *  the status transitions, gated by stages.add_exceptional. */
+export const stageStructuralSchema = z.object({
+  op: z.enum(["move_up", "move_down", "delete"]),
+});
+
+export type StageStructuralInput = z.infer<typeof stageStructuralSchema>;

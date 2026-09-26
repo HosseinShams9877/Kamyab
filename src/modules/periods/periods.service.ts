@@ -2,7 +2,15 @@ import type { Prisma } from "@prisma/client";
 import { toJalali, formatJalali } from "@/lib/jalali";
 import type { PeriodStatus, FollowUpStatus, StageStatus } from "@/types/enums";
 import * as repo from "./periods.repository";
-import type { PeriodRow, StageRow, RegistrationPeriodInput } from "./periods.types";
+import type {
+  PeriodRow,
+  StageRow,
+  RegistrationPeriodInput,
+  StageActionContext,
+  ApplyStageActionArgs,
+  AddExceptionalStageArgs,
+  MoveStageArgs,
+} from "./periods.types";
 
 // Business logic for the periods domain. Jalali<->Date conversion and the
 // read-time financial computation (rule 2) live here; the repository stays a
@@ -25,6 +33,11 @@ function mapStage(s: repo.PeriodWithDetail["stages"][number]): StageRow {
     order: s.order,
     status: s.status as StageStatus,
     isExceptional: s.isExceptional,
+    startDate: dateToJalali(s.startedAt),
+    endDate: dateToJalali(s.endedAt),
+    attemptCount: s.attemptCount,
+    note: s.note,
+    lastChangedByName: s.lastChangedBy?.fullName ?? null,
   };
 }
 
@@ -80,4 +93,62 @@ export function createRegistrationPeriodTx(
   input: RegistrationPeriodInput,
 ): Promise<{ id: string }> {
   return repo.createRegistrationPeriodTx(tx, input);
+}
+
+// --- Stage engine seams (C-6 / Phase 10) ------------------------------------
+// Read seams the cases service uses to authorize + validate; tx seams it runs
+// inside its own $transaction (rule 4). The cases module never touches the
+// Period/CaseStage tables directly (rule 9) — it goes through these.
+
+/** A stage's current state + owning case id (from periods-owned columns). */
+export async function getStageForAction(
+  stageId: string,
+): Promise<StageActionContext | null> {
+  const r = await repo.findStageForAction(stageId);
+  if (!r) return null;
+  return {
+    caseId: r.caseId,
+    periodId: r.periodId,
+    status: r.status as StageStatus,
+    title: r.title,
+    isExceptional: r.isExceptional,
+    attemptCount: r.attemptCount,
+  };
+}
+
+/** A period's owning case id + status, for an "add exceptional stage" request. */
+export async function getPeriodForStageAdd(
+  periodId: string,
+): Promise<{ caseId: string; status: PeriodStatus } | null> {
+  const r = await repo.findPeriodForAdd(periodId);
+  if (!r) return null;
+  return { caseId: r.caseId, status: r.status as PeriodStatus };
+}
+
+export function applyStageActionTx(
+  tx: Prisma.TransactionClient,
+  args: ApplyStageActionArgs,
+): Promise<void> {
+  return repo.applyStageActionTx(tx, args);
+}
+
+export function addExceptionalStageTx(
+  tx: Prisma.TransactionClient,
+  args: AddExceptionalStageArgs,
+): Promise<void> {
+  return repo.addExceptionalStageTx(tx, args);
+}
+
+export function deleteStageTx(
+  tx: Prisma.TransactionClient,
+  stageId: string,
+): Promise<void> {
+  return repo.deleteStageTx(tx, stageId);
+}
+
+export function moveStageTx(
+  tx: Prisma.TransactionClient,
+  args: MoveStageArgs,
+): Promise<void> {
+  return repo.moveStageTx(tx, args);
 }
