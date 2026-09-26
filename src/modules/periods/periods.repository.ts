@@ -166,6 +166,32 @@ export async function findPeriodForAdd(
   });
 }
 
+// --- Financial seams (C-7) --------------------------------------------------
+
+/** A period's owning case id, for routing a payment/adjust-total request to the
+ *  right case (authorization). Null when the period does not exist. */
+export async function findPeriodCase(
+  periodId: string,
+): Promise<{ caseId: string } | null> {
+  return prisma.period.findUnique({
+    where: { id: periodId },
+    select: { caseId: true },
+  });
+}
+
+/** Set a period's agreed total on the caller's transaction (rule 4). null clears
+ *  it (the card then shows "—" for balance). Payments are untouched (C-7). */
+export async function setPeriodTotalTx(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+  totalAmount: bigint | null,
+): Promise<void> {
+  await tx.period.update({
+    where: { id: periodId },
+    data: { totalAmount },
+  });
+}
+
 // --- Stage engine writes (tx-aware, run on the cases module's transaction) --
 
 /** Open statuses: a stage still on the path. Closed = DONE | NOT_NEEDED. */

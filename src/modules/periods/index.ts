@@ -22,6 +22,8 @@ export {
   addExceptionalStageTx,
   deleteStageTx,
   moveStageTx,
+  getPeriodCase,
+  setPeriodTotalTx,
 } from "./periods.service";
 
 // --- Types (isomorphic) -----------------------------------------------------

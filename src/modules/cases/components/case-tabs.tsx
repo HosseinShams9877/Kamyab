@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toPersianDigits } from "@/lib/digits";
 import { formatToman } from "@/lib/money";
 // Isomorphic leaf imports (client-component exception): never the periods barrel.
@@ -10,9 +10,11 @@ import { CaseStages } from "./case-stages";
 
 // The five case-page tabs (C-5). The Stages tab hosts the interactive stage
 // engine (C-6 / Phase 10 — the strip, current-stage line, the six actions, and
-// exceptional stages); the Periods tab lists every validity span; Tasks,
-// Payments, and History show a "later phase" placeholder so the frame is
-// complete without pretending the data exists yet.
+// exceptional stages); the Periods tab lists every validity span; the Payments
+// tab renders the `paymentsPanel` slot composed on the server (C-7 / Phase 11)
+// so this client component never imports the payments barrel. Tasks and History
+// show a "later phase" placeholder so the frame is complete without pretending
+// the data exists yet.
 
 type TabKey = "stages" | "tasks" | "periods" | "payments" | "history";
 
@@ -34,12 +36,14 @@ export function CaseTabs({
   canEdit,
   canAddStage,
   isCancelled,
+  paymentsPanel,
 }: {
   current: PeriodRow | null;
   periods: PeriodRow[];
   canEdit: boolean;
   canAddStage: boolean;
   isCancelled: boolean;
+  paymentsPanel: ReactNode;
 }) {
   const [active, setActive] = useState<TabKey>("stages");
 
@@ -84,11 +88,7 @@ export function CaseTabs({
       {active === "tasks" && (
         <div className={placeholderClass}>کارها در فاز بعدی افزوده می‌شود.</div>
       )}
-      {active === "payments" && (
-        <div className={placeholderClass}>
-          پرداخت‌ها در فاز بعدی افزوده می‌شود.
-        </div>
-      )}
+      {active === "payments" && paymentsPanel}
       {active === "history" && (
         <div className={placeholderClass}>تاریخچه در فاز بعدی افزوده می‌شود.</div>
       )}

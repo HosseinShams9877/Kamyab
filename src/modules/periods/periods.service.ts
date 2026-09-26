@@ -152,3 +152,24 @@ export function moveStageTx(
 ): Promise<void> {
   return repo.moveStageTx(tx, args);
 }
+
+// --- Financial seams (C-7 / Phase 11) ---------------------------------------
+// The payments module targets a period (payment "for which", adjust-total) but
+// never touches the Period table directly (rule 9) — it goes through these.
+
+/** A period's owning case id, for routing a financial request. Null if absent. */
+export async function getPeriodCase(
+  periodId: string,
+): Promise<{ caseId: string } | null> {
+  return repo.findPeriodCase(periodId);
+}
+
+/** Set a period's agreed total on the caller's transaction (adjust-total, C-7).
+ *  null clears it; payments are untouched. */
+export function setPeriodTotalTx(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+  totalAmount: bigint | null,
+): Promise<void> {
+  return repo.setPeriodTotalTx(tx, periodId, totalAmount);
+}

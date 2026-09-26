@@ -146,27 +146,31 @@ export async function findCaseForStage(
   });
 }
 
-export type StageMutationTxArgs = {
+// --- Case mutation transaction (C-6 stages, C-7 financial) ------------------
+
+export type CaseMutationTxArgs = {
   caseId: string;
   actorId: string;
   /** Whether the case was NEW and should be promoted to IN_PROGRESS (C-6 side
-   *  effect #3 — only the five status transitions promote). */
+   *  effect #3 — only the five stage transitions promote; financial writes pass
+   *  false, a payment never advances the path). */
   promoteFromNew: boolean;
-  /** The periods-owned write (transition / add / delete / move), injected so
-   *  this repository never touches the Period/CaseStage tables (rule 9). */
+  /** The domain-owned write (a periods stage transition, or a payment/period-
+   *  total write from the payments module), injected so this repository never
+   *  touches another module's tables (rule 9). */
   apply: (tx: Prisma.TransactionClient) => Promise<void>;
   historyAction: string;
   historyDetail: string;
 };
 
 /**
- * Run a stage mutation + its case-level side effects in one transaction (rule
- * 4): the injected periods write, then the case's last-activity bump (C-6 side
- * effect #2) and optional NEW→IN_PROGRESS promotion (#3), then the history
- * record (#4). The "current stage" (#1) is computed at read time (rule 2) — the
- * Case has no such column, so there is nothing to write for it.
+ * Run a case mutation + its case-level side effects in one transaction (rule 4):
+ * the injected domain write, then the case's last-activity bump and optional
+ * NEW→IN_PROGRESS promotion, then the history record. Shared by the stage engine
+ * (C-6) and financial actions (C-7) — both need Case.lastActivityAt + an
+ * ActivityHistory row, which are cases-owned tables.
  */
-export async function stageMutationTx(args: StageMutationTxArgs): Promise<void> {
+export async function caseMutationTx(args: CaseMutationTxArgs): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await args.apply(tx);
     await tx.case.update({

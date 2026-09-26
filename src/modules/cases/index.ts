@@ -16,8 +16,10 @@ export {
   moveStage,
   canEditStages,
   canAddStages,
+  getCaseOwnership,
+  runCaseMutation,
 } from "./cases.service";
-export type { CasePage } from "./cases.service";
+export type { CasePage, CaseMutationArgs } from "./cases.service";
 
 // --- Schema (isomorphic) ----------------------------------------------------
 export {

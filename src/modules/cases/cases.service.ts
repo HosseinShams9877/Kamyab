@@ -346,7 +346,7 @@ export async function runStageAction(
   }
 
   const note = input.note && input.note.trim() ? input.note.trim() : null;
-  await repo.stageMutationTx({
+  await repo.caseMutationTx({
     caseId: ctx.caseId,
     actorId: user.id,
     promoteFromNew: kase.status === "NEW" && PROMOTING_OPS.has(input.op),
@@ -380,7 +380,7 @@ export async function addExceptionalStage(
   }
 
   const title = input.title.trim();
-  await repo.stageMutationTx({
+  await repo.caseMutationTx({
     caseId: period.caseId,
     actorId: user.id,
     promoteFromNew: false,
@@ -412,7 +412,7 @@ export async function deleteStage(user: Authorizable, stageId: string): Promise<
     return { ok: false, code: 409, message: STAGE_DELETE_HAS_ACTION };
   }
 
-  await repo.stageMutationTx({
+  await repo.caseMutationTx({
     caseId: ctx.caseId,
     actorId: user.id,
     promoteFromNew: false,
@@ -445,7 +445,7 @@ export async function moveStage(
     return { ok: false, code: 409, message: STAGE_MOVE_NOT_EXCEPTIONAL };
   }
 
-  await repo.stageMutationTx({
+  await repo.caseMutationTx({
     caseId: ctx.caseId,
     actorId: user.id,
     promoteFromNew: false,
@@ -454,4 +454,30 @@ export async function moveStage(
     historyDetail: JSON.stringify({ stageId, direction }),
   });
   return { ok: true };
+}
+
+// --- Financial seams (C-7 / Phase 11) ---------------------------------------
+// The payments module owns the Payment table and every financial rule; it needs
+// two things from cases that only the cases module may provide (rule 9): the
+// case's ownership/status (to authorize a financial write, record-scoped like
+// the stage engine) and the shared case-mutation transaction (Case.lastActivityAt
+// + ActivityHistory are cases-owned). A payment never promotes a NEW case, so
+// callers pass promoteFromNew: false.
+
+export type CaseMutationArgs = repo.CaseMutationTxArgs;
+
+/** The case's ownership + status, for authorizing a financial action. Null when
+ *  the case does not exist. */
+export async function getCaseOwnership(
+  caseId: string,
+): Promise<{ ownerId: string; status: CaseStatus; number: string } | null> {
+  const kase = await repo.findCaseForStage(caseId);
+  if (!kase) return null;
+  return { ownerId: kase.ownerId, status: kase.status as CaseStatus, number: kase.number };
+}
+
+/** Run a case mutation (an injected payment/period-total write) with the case's
+ *  last-activity bump + history, in one transaction (rule 4). */
+export function runCaseMutation(args: CaseMutationArgs): Promise<void> {
+  return repo.caseMutationTx(args);
 }
