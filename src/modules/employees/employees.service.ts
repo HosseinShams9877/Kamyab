@@ -56,6 +56,11 @@ export function listSuccessorCandidates(excludeId: string): Promise<EmployeeOpti
   return repo.listActiveEmployees(excludeId);
 }
 
+/** Active employees eligible to own a case, for the case-registration pick (C-4). */
+export function listCaseOwnerOptions(): Promise<EmployeeOption[]> {
+  return repo.listActiveEmployees();
+}
+
 /**
  * Create an employee. Enforces mobile uniqueness (mobile is the username) and an
  * existing/active department when one is given, then hashes the initial password

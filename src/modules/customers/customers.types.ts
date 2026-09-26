@@ -73,6 +73,18 @@ export type CustomerPageData = {
   followUps: FollowUpEntry[];
 };
 
+// A pick-list entry for the case-registration form (C-4). `hasBirthInfo` is
+// true when the customer already has the birth/founding date their type needs,
+// so the form knows whether to reveal the birth-date field.
+export type CustomerOption = {
+  id: string;
+  displayName: string;
+  type: CustomerType;
+  mobile: string;
+  hasBirthInfo: boolean;
+  sendGreeting: boolean;
+};
+
 // List query + result. The sort keys map to server-side orderings.
 export type CustomerSort = "newest" | "name" | "cases";
 

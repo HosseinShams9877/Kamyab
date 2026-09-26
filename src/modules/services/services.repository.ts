@@ -46,6 +46,17 @@ export async function findServiceById(id: string): Promise<ServiceDetail | null>
   });
 }
 
+/** Active services for the case-registration pick (C-4). */
+export async function listActiveServices(): Promise<
+  { id: string; name: string; renewable: boolean }[]
+> {
+  return prisma.service.findMany({
+    where: { status: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, renewable: true },
+  });
+}
+
 export type CreateServiceData = {
   name: string;
   categoryId: string;

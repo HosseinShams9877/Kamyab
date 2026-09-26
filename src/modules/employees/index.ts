@@ -9,6 +9,7 @@ export {
   getEmployee,
   listDepartmentOptions,
   listSuccessorCandidates,
+  listCaseOwnerOptions,
   createEmployee,
   updateEmployee,
   reactivateEmployee,

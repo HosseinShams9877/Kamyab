@@ -8,6 +8,7 @@
 export {
   listServices,
   getService,
+  listActiveServiceOptions,
   listCategoryOptions,
   createService,
   updateService,

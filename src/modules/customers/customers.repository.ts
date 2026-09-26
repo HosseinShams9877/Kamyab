@@ -129,6 +129,67 @@ export async function deleteCustomer(id: string): Promise<void> {
   await prisma.customer.delete({ where: { id } });
 }
 
+// --- Case-registration seams (C-4) -----------------------------------------
+
+export type ActiveCustomerRow = {
+  id: string;
+  type: string;
+  fullName: string | null;
+  companyName: string | null;
+  code: string;
+  mobile: string;
+  birthDate: Date | null;
+  foundingDate: Date | null;
+  sendGreeting: boolean;
+};
+
+/** Active customers matching an optional search term, for the case-form pick. */
+export async function listActiveCustomers(q: string): Promise<ActiveCustomerRow[]> {
+  const where: Prisma.CustomerWhereInput = { status: true };
+  if (q) {
+    where.OR = [
+      { fullName: { contains: q } },
+      { companyName: { contains: q } },
+      { mobile: { contains: q } },
+      { nationalId: { contains: q } },
+      { nationalEntityId: { contains: q } },
+      { code: { contains: q } },
+    ];
+  }
+  return prisma.customer.findMany({
+    where,
+    orderBy: [{ companyName: "asc" }, { fullName: "asc" }],
+    take: 50,
+    select: {
+      id: true,
+      type: true,
+      fullName: true,
+      companyName: true,
+      code: true,
+      mobile: true,
+      birthDate: true,
+      foundingDate: true,
+      sendGreeting: true,
+    },
+  });
+}
+
+/** The birth/founding-date + greeting fields the case form may set on the
+ *  customer, written on the caller's save transaction (rule 4). */
+export type BirthInfoPatch = {
+  birthDate?: Date;
+  foundingDate?: Date;
+  sendGreeting?: boolean;
+};
+
+export async function saveBirthInfoTx(
+  tx: Prisma.TransactionClient,
+  id: string,
+  data: BirthInfoPatch,
+): Promise<void> {
+  await tx.customer.update({ where: { id }, data });
+}
+
 export async function countCustomerCases(id: string): Promise<number> {
   return prisma.case.count({ where: { customerId: id } });
 }

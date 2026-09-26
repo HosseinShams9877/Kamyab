@@ -40,6 +40,13 @@ export function getService(id: string): Promise<ServiceDetail | null> {
   return repo.findServiceById(id);
 }
 
+/** Active services for the case-registration pick (C-4). */
+export function listActiveServiceOptions(): Promise<
+  { id: string; name: string; renewable: boolean }[]
+> {
+  return repo.listActiveServices();
+}
+
 /** Active categories for the service form's dropdown (rule 9: settings owns them). */
 export async function listCategoryOptions(): Promise<CategoryOption[]> {
   const items = await listListItems("categories");

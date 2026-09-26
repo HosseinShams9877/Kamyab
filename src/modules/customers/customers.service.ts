@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import type { Prisma as PrismaNS } from "@prisma/client";
 import type { CustomerType } from "@/types/enums";
 import {
   parseJalali,
@@ -19,6 +20,7 @@ import type {
   CustomerListResult,
   CustomerPageData,
   CustomerCaseSummary,
+  CustomerOption,
   FollowUpEntry,
 } from "./customers.types";
 import {
@@ -262,6 +264,57 @@ export async function updateCustomer(
 
 export async function setCustomerStatus(id: string, status: boolean): Promise<void> {
   await repo.setCustomerStatus(id, status);
+}
+
+// --- Case-registration seams (C-4) -----------------------------------------
+
+/** True when the customer already has the birth/founding date its type needs. */
+function hasBirthInfo(row: repo.ActiveCustomerRow): boolean {
+  return row.type === "NATURAL" ? row.birthDate !== null : row.foundingDate !== null;
+}
+
+/** Active customers for the case-form pick, filtered by an optional search term. */
+export async function listActiveCustomerOptions(
+  q?: string,
+): Promise<CustomerOption[]> {
+  const term = q ? toEnglishDigits(q.trim()) : "";
+  const rows = await repo.listActiveCustomers(term);
+  return rows.map((r) => ({
+    id: r.id,
+    displayName: customerDisplayName({
+      type: r.type as CustomerType,
+      fullName: r.fullName,
+      companyName: r.companyName,
+      code: r.code,
+    }),
+    type: r.type as CustomerType,
+    mobile: r.mobile,
+    hasBirthInfo: hasBirthInfo(r),
+    sendGreeting: r.sendGreeting,
+  }));
+}
+
+/**
+ * Save the birth/founding date and greeting flag the case form collected onto
+ * the CUSTOMER (not the case — B-9: a customer with three services must not get
+ * three greetings), on the cases module's save transaction (rule 4). A Jalali
+ * date string is converted here; the date is only written when the customer
+ * still lacks it, but the greeting flag is always applied.
+ */
+export function saveCaseBirthInfoTx(
+  tx: PrismaNS.TransactionClient,
+  customerId: string,
+  input: { type: CustomerType; birthDate?: string; foundingDate?: string; sendGreeting: boolean },
+): Promise<void> {
+  const patch: repo.BirthInfoPatch = { sendGreeting: input.sendGreeting };
+  if (input.type === "NATURAL") {
+    const d = input.birthDate ? jalaliToDate(input.birthDate) : null;
+    if (d) patch.birthDate = d;
+  } else {
+    const d = input.foundingDate ? jalaliToDate(input.foundingDate) : null;
+    if (d) patch.foundingDate = d;
+  }
+  return repo.saveBirthInfoTx(tx, customerId, patch);
 }
 
 /**
