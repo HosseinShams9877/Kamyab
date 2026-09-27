@@ -108,6 +108,7 @@ model Customer {
 
   cases        Case[]
   birthdayLogs BirthdayLog[]
+  tasks        Task[]
 }
 
 // ============================================================================
@@ -303,6 +304,8 @@ model Task {
   title       String // 2-150
   caseId      String?
   case        Case?     @relation(fields: [caseId], references: [id])
+  customerId  String?   // ← این خط
+  customer    Customer? @relation(fields: [customerId], references: [id]) // ← این خط
   ownerId     String
   owner       Employee  @relation("TaskOwner", fields: [ownerId], references: [id])
   dueDate     DateTime // Jalali
@@ -310,7 +313,7 @@ model Task {
   status      String // TaskStatus: OPEN | COMPLETED | CANCELLED
   note        String? // up to 500
   closedAt    DateTime? // archive threshold counts from here
-  dueTime String? // "HH:MM" — optional time of day
+  dueTime     String? // "HH:MM" — optional time of day
   archivedAt  DateTime? // set when archived (auto or manual)
   createdById String
   createdBy   Employee  @relation("TaskCreatedBy", fields: [createdById], references: [id])
@@ -322,6 +325,7 @@ model Task {
   @@index([ownerId, status])
   @@index([dueDate, status])
   @@index([caseId])
+  @@index([customerId]) 
   @@index([status, closedAt])
 }
 

@@ -59,14 +59,15 @@ export function TaskForm({ data }: { data: TaskFormData }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          caseId,
-          ownerId,
-          dueDate,
-          dueTime,
-          priority,
-          note,
-        }),
+  title,
+  caseId,
+  customerId,
+  ownerId,
+  dueDate,
+  dueTime,
+  priority,
+  note,
+}),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };

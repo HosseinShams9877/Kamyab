@@ -126,15 +126,21 @@ export async function getTaskFormData(user: Authorizable): Promise<TaskFormData>
 function toRow(r: repo.TaskRecord, today: ReturnType<typeof todayJalali>): TaskRow {
   const status = r.status as TaskStatusKey;
   const archived = r.archivedAt !== null;
+  // Prefer the direct customer; fall back to the case's customer.
   const custName =
-    r.case?.customer?.fullName ?? r.case?.customer?.companyName ?? null;
+    r.customer?.fullName ??
+    r.customer?.companyName ??
+    r.case?.customer?.fullName ??
+    r.case?.customer?.companyName ??
+    null;
   return {
     id: r.id,
     title: r.title,
     caseId: r.caseId,
     caseNumber: r.case?.number ?? null,
-    serviceName: r.case?.service?.name ?? null,
+    customerId: r.customerId,
     customerName: custName,
+    serviceName: r.case?.service?.name ?? null,
     ownerId: r.ownerId,
     ownerName: r.owner.fullName,
     dueDate: dateToJalali(r.dueDate),
@@ -215,6 +221,8 @@ export async function getTasksView(
       { case: { is: { customer: { is: { fullName: { contains: q } } } } } },
       { case: { is: { customer: { is: { companyName: { contains: q } } } } } },
       { case: { is: { service: { is: { name: { contains: q } } } } } },
+      { customer: { is: { fullName: { contains: q } } } },
+      { customer: { is: { companyName: { contains: q } } } },
       { owner: { is: { fullName: { contains: q } } } },
     ];
   }
@@ -267,6 +275,7 @@ async function resolveWrite(
   | {
       ok: true;
       caseId: string | null;
+      customerId: string | null;
       ownerId: string;
       dueDate: Date;
       dueTime: string | null;
@@ -291,6 +300,15 @@ async function resolveWrite(
     caseId = input.caseId;
   }
 
+  // Optional direct customer.
+  let customerId: string | null = null;
+  if (input.customerId && input.customerId.trim()) {
+    const customers = await listActiveCustomerOptions();
+    if (customers.some((c) => c.id === input.customerId)) {
+      customerId = input.customerId;
+    }
+  }
+
   const j = parseJalali(input.dueDate);
   if (!j) return { ok: false, code: 422, message: DUE_DATE_INVALID };
 
@@ -303,6 +321,7 @@ async function resolveWrite(
   return {
     ok: true,
     caseId,
+    customerId,
     ownerId: input.ownerId,
     dueDate: toGregorianDate(j),
     dueTime,
@@ -323,6 +342,7 @@ export async function createTask(user: Authorizable, input: TaskCreateInput): Pr
   const { id } = await repo.createTask({
     title: input.title,
     caseId: resolved.caseId,
+    customerId: resolved.customerId,
     ownerId: resolved.ownerId,
     dueDate: resolved.dueDate,
     dueTime: resolved.dueTime,
@@ -351,6 +371,7 @@ export async function updateTask(
   await repo.updateTask(taskId, {
     title: input.title,
     caseId: resolved.caseId,
+    customerId: resolved.customerId,
     ownerId: resolved.ownerId,
     dueDate: resolved.dueDate,
     dueTime: resolved.dueTime,

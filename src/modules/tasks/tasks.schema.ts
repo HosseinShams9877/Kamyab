@@ -53,6 +53,7 @@ const priority = TaskPriority.catch("NORMAL" as const).refine(
 export const taskCreateSchema = z.object({
   title,
   caseId: z.string().trim().optional().or(z.literal("")),
+  customerId: z.string().trim().optional().or(z.literal("")),
   ownerId: z.string().trim().min(1, { message: OWNER_REQUIRED }),
   dueDate,
   dueTime,

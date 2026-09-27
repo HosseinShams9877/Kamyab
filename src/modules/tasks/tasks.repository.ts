@@ -5,12 +5,13 @@ import { prisma } from "@/lib/db";
 // its own followUps aggregate. The record-result transaction is owned by the
 // cases module; this module contributes the task writes as tx-aware closures.
 
-// Joined shape for a task row: owner name, optional case + its service + its
-// customer, follow-up count.
+// Joined shape for a task row: owner name, optional case + its service, an
+// optional direct customer, follow-up count.
 const TASK_SELECT = {
   id: true,
   title: true,
   caseId: true,
+  customerId: true,
   ownerId: true,
   dueDate: true,
   dueTime: true,
@@ -26,6 +27,7 @@ const TASK_SELECT = {
       customer: { select: { fullName: true, companyName: true } },
     },
   },
+  customer: { select: { fullName: true, companyName: true } },
   owner: { select: { fullName: true } },
   createdBy: { select: { fullName: true } },
   _count: { select: { followUps: true } },
@@ -184,6 +186,7 @@ export function countOpenTasksForCase(caseId: string): Promise<number> {
 export type TaskWriteData = {
   title: string;
   caseId: string | null;
+  customerId: string | null;
   ownerId: string;
   dueDate: Date;
   dueTime: string | null;
@@ -201,6 +204,7 @@ export function createTaskTx(
     data: {
       title: data.title,
       caseId: data.caseId,
+      customerId: data.customerId,
       ownerId: data.ownerId,
       dueDate: data.dueDate,
       dueTime: data.dueTime,
@@ -227,6 +231,7 @@ export function updateTask(
     data: {
       title: data.title,
       caseId: data.caseId,
+      customerId: data.customerId,
       ownerId: data.ownerId,
       dueDate: data.dueDate,
       dueTime: data.dueTime,

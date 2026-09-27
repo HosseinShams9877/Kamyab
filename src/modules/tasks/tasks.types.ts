@@ -33,8 +33,9 @@ export type TaskRow = {
   title: string;
   caseId: string | null;
   caseNumber: string | null;
-  serviceName: string | null;
+  customerId: string | null;
   customerName: string | null;
+  serviceName: string | null;
   ownerId: string;
   ownerName: string;
   dueDate: string; // Jalali YYYY/MM/DD
