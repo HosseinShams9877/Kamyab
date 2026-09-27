@@ -8,13 +8,13 @@ import { CustomerForm } from "@/modules/customers";
 // (client) branching form. The API re-checks the same permission regardless.
 export default async function NewCustomerPage() {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
-  if (!can(user, "customers.create")) redirect("/customers");
+  const customersHome = user.role === "EMPLOYEE" ? "/employee/customers" : "/customers";
+  if (!can(user, "customers.create")) redirect(customersHome);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-6">
-        <Link href="/customers" className="text-sm text-primary hover:underline">
+        <Link href={customersHome} className="text-sm text-primary hover:underline">
           ← بازگشت به فهرست مشتریان
         </Link>
       </div>

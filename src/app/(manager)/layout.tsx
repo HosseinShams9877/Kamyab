@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser, LogoutButton } from "@/modules/auth";
 import { can } from "@/modules/permissions";
 import { ROLE_LABELS } from "@/modules/employees";
+import { SearchBox } from "@/modules/search";
 import { AppShell, type NavItem } from "@/components/layout/app-shell";
 
 // Shared layout for the manager + supervisor route group. It authenticates the
@@ -45,6 +46,7 @@ export default async function ManagerLayout({
       userName={user.fullName}
       roleLabel={ROLE_LABELS[user.role]}
       logout={<LogoutButton />}
+      searchSlot={<SearchBox />}
     >
       {children}
     </AppShell>

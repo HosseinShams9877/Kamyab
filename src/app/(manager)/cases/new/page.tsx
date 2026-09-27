@@ -13,8 +13,8 @@ export default async function NewCasePage({
   searchParams: Promise<{ customerId?: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
-  if (!can(user, "cases.create")) redirect("/dashboard");
+  const home = user.role === "EMPLOYEE" ? "/employee" : "/dashboard";
+  if (!can(user, "cases.create")) redirect(home);
 
   const { customerId } = await searchParams;
   const data = await getCaseFormData(customerId ?? null);
@@ -22,7 +22,7 @@ export default async function NewCasePage({
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-6">
-        <Link href="/dashboard" className="text-sm text-primary hover:underline">
+        <Link href={home} className="text-sm text-primary hover:underline">
           ← بازگشت به داشبورد
         </Link>
       </div>

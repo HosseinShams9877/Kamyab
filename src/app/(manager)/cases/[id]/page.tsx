@@ -31,9 +31,9 @@ export default async function CaseDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
+  const home = user.role === "EMPLOYEE" ? "/employee" : "/dashboard";
   if (!can(user, "cases.view_all") && !can(user, "cases.view_own")) {
-    redirect("/dashboard");
+    redirect(home);
   }
 
   const { id } = await params;
@@ -41,6 +41,14 @@ export default async function CaseDetailPage({
   if (!page) notFound();
 
   const { header, periods, current } = page;
+
+  // Ownership gate (rule 3): without cases.view_all, a user may open only a case
+  // they own. This shared /cases/[id] route serves both a manager (view_all) and
+  // the owning employee (view_own) — the per-action capabilities below are all
+  // scoped to header.ownerId, and every mutation API re-checks.
+  if (!can(user, "cases.view_all") && header.ownerId !== user.id) {
+    redirect(home);
+  }
 
   // Server-side authorization for the stage engine (rule 3): the same booleans
   // gate the API routes. They decide only whether the buttons are shown; the

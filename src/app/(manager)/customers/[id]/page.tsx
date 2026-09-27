@@ -23,8 +23,13 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
-  if (!can(user, "customers.view")) redirect("/dashboard");
+  // `customers.view` is a global (non-owner-scoped) permission, so an employee
+  // who holds it may open any customer — this shared /customers/[id] route serves
+  // both roles. The cases listed here still link into /cases/[id], which gates by
+  // ownership, and every mutation API re-checks (rule 3).
+  if (!can(user, "customers.view")) {
+    redirect(user.role === "EMPLOYEE" ? "/employee" : "/dashboard");
+  }
 
   const { id } = await params;
   const customer = await getCustomer(id);
@@ -46,7 +51,10 @@ export default async function CustomerDetailPage({
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
       <div className="mb-6">
-        <Link href="/customers" className="text-sm text-primary hover:underline">
+        <Link
+          href={user.role === "EMPLOYEE" ? "/employee/customers" : "/customers"}
+          className="text-sm text-primary hover:underline"
+        >
           ← بازگشت به فهرست مشتریان
         </Link>
       </div>

@@ -11,8 +11,9 @@ export default async function EditCustomerPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
-  if (!can(user, "customers.edit")) redirect("/customers");
+  if (!can(user, "customers.edit")) {
+    redirect(user.role === "EMPLOYEE" ? "/employee/customers" : "/customers");
+  }
 
   const { id } = await params;
   const customer = await getCustomer(id);

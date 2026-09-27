@@ -31,6 +31,17 @@ export type EmployeeOption = { id: string; fullName: string };
 
 export type Workload = { activeCases: number; openTasks: number };
 
+/** A row of the dashboard's employee-workload table (C-2 / the workload report).
+ *  Purely a workload-control view — never a performance metric. */
+export type WorkloadRow = {
+  id: string;
+  fullName: string;
+  department: string | null;
+  activeCases: number;
+  todaysTasks: number;
+  overdueTasks: number;
+};
+
 // The permission matrix needs the role default AND the current effective value
 // for every key, so the UI can show "default: allowed" next to each toggle.
 export type PermissionsView = {

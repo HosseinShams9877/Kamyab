@@ -6,6 +6,7 @@ import type {
   EmployeeListItem,
   EmployeeOption,
   Workload,
+  WorkloadRow,
 } from "./employees.types";
 
 // ALL Prisma access for the employees domain lives here (modular rule: the
@@ -134,6 +135,62 @@ export async function listActiveEmployees(excludeId?: string): Promise<EmployeeO
     orderBy: { fullName: "asc" },
     select: { id: true, fullName: true },
   });
+}
+
+const ACTIVE_CASE_STATUSES = ["NEW", "IN_PROGRESS"];
+
+/**
+ * Bulk workload across every active employee for the dashboard table (C-2): active
+ * cases owned, OPEN tasks due today, and overdue OPEN tasks. Three groupBy counts
+ * (one query each, not one-per-employee) joined onto the active-employee list.
+ * `todayStart`/`tomorrowStart` are the local-day bounds the service computes.
+ */
+export async function listWorkloads(
+  todayStart: Date,
+  tomorrowStart: Date,
+): Promise<WorkloadRow[]> {
+  const [employees, activeCases, todaysTasks, overdueTasks] = await Promise.all([
+    prisma.employee.findMany({
+      where: { status: true },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true, department: { select: { title: true } } },
+    }),
+    prisma.case.groupBy({
+      by: ["ownerId"],
+      where: { status: { in: ACTIVE_CASE_STATUSES } },
+      _count: { _all: true },
+    }),
+    prisma.task.groupBy({
+      by: ["ownerId"],
+      where: {
+        status: "OPEN",
+        archivedAt: null,
+        dueDate: { gte: todayStart, lt: tomorrowStart },
+      },
+      _count: { _all: true },
+    }),
+    prisma.task.groupBy({
+      by: ["ownerId"],
+      where: { status: "OPEN", archivedAt: null, dueDate: { lt: todayStart } },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const countBy = (
+    rows: { ownerId: string; _count: { _all: number } }[],
+  ): Map<string, number> => new Map(rows.map((r) => [r.ownerId, r._count._all]));
+  const cases = countBy(activeCases);
+  const today = countBy(todaysTasks);
+  const overdue = countBy(overdueTasks);
+
+  return employees.map((e) => ({
+    id: e.id,
+    fullName: e.fullName,
+    department: e.department?.title ?? null,
+    activeCases: cases.get(e.id) ?? 0,
+    todaysTasks: today.get(e.id) ?? 0,
+    overdueTasks: overdue.get(e.id) ?? 0,
+  }));
 }
 
 /**

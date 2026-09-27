@@ -24,12 +24,14 @@ export function AppShell({
   userName,
   roleLabel,
   logout,
+  searchSlot,
   children,
 }: {
   navItems: NavItem[];
   userName: string;
   roleLabel: string;
   logout: React.ReactNode;
+  searchSlot?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -116,16 +118,9 @@ export function AppShell({
             </svg>
           </button>
 
-          {/* Global-search slot — placeholder until the search phase wires it. */}
-          <div className="min-w-0 flex-1">
-            <input
-              type="search"
-              disabled
-              placeholder="جستجو…"
-              aria-label="جستجوی سراسری"
-              className="h-10 w-full max-w-md rounded-control border border-border bg-page px-3 text-sm text-text placeholder:text-text-secondary"
-            />
-          </div>
+          {/* Global-search slot (C-16). The route-group layout passes the
+              search box in; it falls back to nothing if a layout omits it. */}
+          <div className="min-w-0 flex-1">{searchSlot}</div>
 
           <div className="hidden text-right sm:block">
             <div className="text-sm font-medium text-text">{userName}</div>

@@ -150,6 +150,7 @@ export async function listCustomers(
     status,
     city: params.city && params.city.trim() ? params.city.trim() : null,
     sort,
+    ...(params.ownerId ? { ownerId: params.ownerId } : {}),
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });

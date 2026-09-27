@@ -18,6 +18,7 @@ import type {
   EmployeeOption,
   PermissionsView,
   Workload,
+  WorkloadRow,
 } from "./employees.types";
 import {
   buildSuccessorRequiredMessage,
@@ -168,6 +169,17 @@ export async function updatePermissions(
 
 export function getWorkload(id: string): Promise<Workload> {
   return repo.countWorkload(id);
+}
+
+/**
+ * Bulk workload for the dashboard's employee table (C-2 / the workload report).
+ * Computes the local-day bounds ("today" 00:00 → tomorrow 00:00) once and lets
+ * the repository do the three grouped counts. `now` is injectable for testing.
+ */
+export function listWorkloads(now: Date = new Date()): Promise<WorkloadRow[]> {
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+  return repo.listWorkloads(todayStart, tomorrowStart);
 }
 
 /**

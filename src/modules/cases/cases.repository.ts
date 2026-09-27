@@ -134,6 +134,76 @@ export async function findActiveCases(): Promise<
   });
 }
 
+// --- Case list, dashboard counts & receivables (C-2 / C-15 / Phase 16) ------
+// Raw list read + counts for the cases list page and the dashboard indicators.
+// Persian text and the balance/scope decisions stay in the service; this layer
+// only shapes the Prisma query. The row carries every period's total + payments
+// so the service can compute the balance at read time (rule 2).
+
+const LIST_ACTIVE_STATUSES = ["NEW", "IN_PROGRESS"];
+
+export type CaseListRow = {
+  id: string;
+  number: string;
+  status: string;
+  lastActivityAt: Date;
+  customer: { type: string; fullName: string | null; companyName: string | null };
+  service: { name: string };
+  owner: { fullName: string };
+  periods: { status: string; totalAmount: bigint | null; payments: { amount: bigint }[] }[];
+};
+
+/** List cases matching `where`, newest activity first, optionally paginated. */
+export async function queryCaseRows(
+  where: Prisma.CaseWhereInput,
+  opts: { skip?: number; take?: number } = {},
+): Promise<CaseListRow[]> {
+  return prisma.case.findMany({
+    where,
+    orderBy: { lastActivityAt: "desc" },
+    skip: opts.skip,
+    take: opts.take,
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      lastActivityAt: true,
+      customer: { select: { type: true, fullName: true, companyName: true } },
+      service: { select: { name: true } },
+      owner: { select: { fullName: true } },
+      periods: {
+        select: {
+          status: true,
+          totalAmount: true,
+          payments: { select: { amount: true } },
+        },
+      },
+    },
+  });
+}
+
+export async function countCaseRows(where: Prisma.CaseWhereInput): Promise<number> {
+  return prisma.case.count({ where });
+}
+
+/** Count active (NEW | IN_PROGRESS) cases, optionally for one owner (C-2). */
+export async function countActiveCases(ownerId?: string): Promise<number> {
+  return prisma.case.count({
+    where: { status: { in: LIST_ACTIVE_STATUSES }, ...(ownerId ? { ownerId } : {}) },
+  });
+}
+
+/** Count stale cases: active with no activity since `cutoff` (C-2, rule 2). */
+export async function countStaleCases(cutoff: Date, ownerId?: string): Promise<number> {
+  return prisma.case.count({
+    where: {
+      status: { in: LIST_ACTIVE_STATUSES },
+      lastActivityAt: { lt: cutoff },
+      ...(ownerId ? { ownerId } : {}),
+    },
+  });
+}
+
 /** The customer's active flag + type, for register validation and to route the
  *  birth-info patch (NATURAL → birthDate, LEGAL → foundingDate). Null if absent. */
 export async function findCustomerForRegister(

@@ -94,6 +94,8 @@ export type CustomerListParams = {
   status?: "active" | "inactive" | "";
   city?: string;
   sort?: CustomerSort;
+  /** Restrict to customers related to this employee's cases (C-15). */
+  ownerId?: string;
   page?: number;
 };
 

@@ -53,6 +53,7 @@ export function TasksPanel({
   results,
   caps,
   viewAll,
+  basePath = "/tasks",
 }: {
   tasks: TaskRow[];
   tab: TaskTab;
@@ -61,6 +62,8 @@ export function TasksPanel({
   results: { id: string; title: string }[];
   caps: TaskCaps;
   viewAll: boolean;
+  /** Route the tab links resolve against — /tasks (manager) or /employee/tasks. */
+  basePath?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -185,7 +188,7 @@ export function TasksPanel({
           return (
             <Link
               key={t.key}
-              href={`/tasks?tab=${t.key}`}
+              href={`${basePath}?tab=${t.key}`}
               role="tab"
               aria-selected={isActive}
               className={`flex min-h-[44px] items-center whitespace-nowrap border-b-2 px-4 text-sm ${

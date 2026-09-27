@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { requireUser, LogoutButton } from "@/modules/auth";
+import { can } from "@/modules/permissions";
 import { ROLE_LABELS } from "@/modules/employees";
+import { SearchBox } from "@/modules/search";
 import { AppShell, type NavItem } from "@/components/layout/app-shell";
 
 // Shared layout for the employee route group (C-15). Same shell as the manager
@@ -14,11 +16,25 @@ export default async function EmployeeLayout({
   const user = await requireUser();
   if (user.role !== "EMPLOYEE") redirect("/dashboard");
 
-  // Only the dashboard route exists in this group today. Phase 16 builds the
-  // employee panel as the manager pages with an owner-scoped filter (my-cases,
-  // tasks, renewals); their links are added here then. We deliberately do not
-  // link routes that do not exist yet (they would 404).
-  const navItems: NavItem[] = [{ href: "/employee", label: "داشبورد" }];
+  // The employee panel is the manager pages with an owner-scoped filter (C-15):
+  // each list lives under /employee/* so it does not collide with the manager
+  // group's top-level routes. Every link is still permission-gated — an employee
+  // whose defaults were trimmed does not see a section they cannot open. Detail
+  // pages are the shared /cases/[id] and /customers/[id], which guard by
+  // ownership, so no per-item route is duplicated here.
+  const navItems: NavItem[] = [
+    { href: "/employee", label: "داشبورد" },
+    can(user, "customers.view") && { href: "/employee/customers", label: "مشتریان" },
+    (can(user, "cases.view_all") || can(user, "cases.view_own")) && {
+      href: "/employee/cases",
+      label: "پرونده‌ها",
+    },
+    (can(user, "tasks.view_all") || can(user, "tasks.view_own")) && {
+      href: "/employee/tasks",
+      label: "کارها",
+    },
+    can(user, "renewals.view") && { href: "/employee/renewals", label: "تمدیدها" },
+  ].filter(Boolean) as NavItem[];
 
   return (
     <AppShell
@@ -26,6 +42,7 @@ export default async function EmployeeLayout({
       userName={user.fullName}
       roleLabel={ROLE_LABELS[user.role]}
       logout={<LogoutButton />}
+      searchSlot={<SearchBox />}
     >
       {children}
     </AppShell>

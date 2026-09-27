@@ -12,10 +12,9 @@ import {
 } from "@/modules/customers";
 import { toPersianDigits } from "@/lib/digits";
 
-// Customer list (C-3): server-side search, filters, sort, and 25-row pagination.
-// The filter bar is a GET form, so every query lives in the URL and the page is
-// fully server-rendered — no client state needed for search.
-
+// Employee customers list (C-15): the manager /customers page scoped to the
+// customers related to the employee's own cases (listCustomers `ownerId`).
+// Detail opens the shared /customers/[id] (customers.view is a global permission).
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -27,14 +26,13 @@ function one(v: string | string[] | undefined): string {
 const inputClass =
   "w-full rounded-control border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary";
 
-export default async function CustomersPage({
+export default async function EmployeeCustomersPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
-  if (!can(user, "customers.view")) redirect("/dashboard");
+  if (!can(user, "customers.view")) redirect("/employee");
 
   const sp = await searchParams;
   const params: CustomerListParams = {
@@ -43,6 +41,7 @@ export default async function CustomersPage({
     status: one(sp.status) === "active" || one(sp.status) === "inactive" ? (one(sp.status) as "active" | "inactive") : "",
     city: one(sp.city),
     sort: (["newest", "name", "cases"].includes(one(sp.sort)) ? one(sp.sort) : "newest") as CustomerSort,
+    ownerId: user.id,
     page: Number(one(sp.page)) || 1,
   };
 
@@ -52,7 +51,6 @@ export default async function CustomersPage({
   ]);
   const mayCreate = can(user, "customers.create");
 
-  // Preserve current filters when building page links.
   function pageHref(page: number): string {
     const qs = new URLSearchParams();
     if (params.q) qs.set("q", params.q);
@@ -61,13 +59,13 @@ export default async function CustomersPage({
     if (params.city) qs.set("city", params.city);
     if (params.sort) qs.set("sort", params.sort);
     qs.set("page", String(page));
-    return `/customers?${qs.toString()}`;
+    return `/employee/customers?${qs.toString()}`;
   }
 
   return (
     <main className="mx-auto w-full px-4 py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-text">مشتریان</h1>
+        <h1 className="text-2xl font-bold text-text">مشتریان من</h1>
         {mayCreate && (
           <Link
             href="/customers/new"
@@ -80,7 +78,7 @@ export default async function CustomersPage({
       {/* Filter bar — a GET form so all state lives in the URL. */}
       <form
         method="get"
-        action="/customers"
+        action="/employee/customers"
         className="mb-6 grid grid-cols-1 gap-3 rounded-card border border-border bg-card p-4 shadow-card sm:grid-cols-2 lg:grid-cols-5"
       >
         <div className="sm:col-span-2 lg:col-span-2">

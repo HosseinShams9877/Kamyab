@@ -301,33 +301,7 @@ export async function getRenewalsView(tab: RenewalTab): Promise<RenewalRow[]> {
   ]);
   const now = new Date();
   return rows
-    .map((r): RenewalRow => {
-      const daysRemaining = daysRemainingFromDate(r.expiryDate, now);
-      const total = r.totalAmount === null ? null : Number(r.totalAmount);
-      const paid = r.payments.reduce((sum, p) => sum + Number(p.amount), 0);
-      const status = r.status as PeriodStatus;
-      const followUpStatus = r.followUpStatus as FollowUpStatus;
-      return {
-        periodId: r.id,
-        caseId: r.case.id,
-        caseNumber: r.case.number,
-        customerName: customerDisplayName(r.case.customer),
-        serviceName: r.case.service.name,
-        ownerName: r.case.owner.fullName,
-        ownerId: r.case.ownerId,
-        indexNumber: r.indexNumber,
-        expiryDate: dateToJalali(r.expiryDate),
-        daysRemaining,
-        followUpStatus,
-        status,
-        totalAmount: total,
-        balance: total === null ? null : total - paid,
-        abandonable: isAbandonable(
-          { status, daysRemaining, followUpStatus },
-          thresholds.abandonmentDays,
-        ),
-      };
-    })
+    .map((r) => toRenewalRow(r, thresholds.abandonmentDays, now))
     .filter((row) =>
       inRenewalTab(tab, {
         status: row.status,
@@ -335,6 +309,71 @@ export async function getRenewalsView(tab: RenewalTab): Promise<RenewalRow[]> {
         followUpStatus: row.followUpStatus,
       }),
     );
+}
+
+/** Map one raw renewals-queue row to a RenewalRow, resolving days-remaining, the
+ *  financial figures and abandon-eligibility at read time (rule 2). Shared by the
+ *  renewals page view (getRenewalsView) and the dashboard seam
+ *  (getRenewalDashboard) so both classify a period identically. */
+function toRenewalRow(
+  r: Awaited<ReturnType<typeof repo.findRenewalsQueue>>[number],
+  abandonmentDays: number,
+  now: Date,
+): RenewalRow {
+  const daysRemaining = daysRemainingFromDate(r.expiryDate, now);
+  const total = r.totalAmount === null ? null : Number(r.totalAmount);
+  const paid = r.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const status = r.status as PeriodStatus;
+  const followUpStatus = r.followUpStatus as FollowUpStatus;
+  return {
+    periodId: r.id,
+    caseId: r.case.id,
+    caseNumber: r.case.number,
+    customerName: customerDisplayName(r.case.customer),
+    serviceName: r.case.service.name,
+    ownerName: r.case.owner.fullName,
+    ownerId: r.case.ownerId,
+    indexNumber: r.indexNumber,
+    expiryDate: dateToJalali(r.expiryDate),
+    daysRemaining,
+    followUpStatus,
+    status,
+    totalAmount: total,
+    balance: total === null ? null : total - paid,
+    abandonable: isAbandonable(
+      { status, daysRemaining, followUpStatus },
+      abandonmentDays,
+    ),
+  };
+}
+
+/**
+ * The dashboard renewals seam (C-2). Reads the same ACTIVE/ABANDONED queue and
+ * returns the "near" list (ACTIVE periods expiring within 30 days — already-
+ * expired ones included, rule 2 "≤"), most-urgent first, plus the ABANDONED
+ * count. `ownerId` restricts to one owner's cases (the employee dashboard);
+ * null (the default) spans every owner (the manager dashboard). `now` is
+ * injectable so a computed view is deterministic.
+ */
+export async function getRenewalDashboard(
+  ownerId: string | null = null,
+  now: Date = new Date(),
+): Promise<{ near: RenewalRow[]; nearCount: number; abandonedCount: number }> {
+  const [rows, thresholds] = await Promise.all([
+    repo.findRenewalsQueue(),
+    getThresholds(),
+  ]);
+  const mapped = rows
+    .map((r) => toRenewalRow(r, thresholds.abandonmentDays, now))
+    .filter((row) => (ownerId ? row.ownerId === ownerId : true));
+  const near = mapped.filter(
+    (row) =>
+      row.status === "ACTIVE" &&
+      row.daysRemaining !== null &&
+      row.daysRemaining <= 30,
+  );
+  const abandonedCount = mapped.filter((row) => row.status === "ABANDONED").length;
+  return { near, nearCount: near.length, abandonedCount };
 }
 
 // --- Engine seams (C-14 / Phase 15) -----------------------------------------

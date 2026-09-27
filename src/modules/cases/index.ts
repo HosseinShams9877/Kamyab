@@ -33,6 +33,10 @@ export {
   cancelCase,
   restoreCase,
   getCancellationReport,
+  listCasesView,
+  countActiveCases,
+  countStaleCases,
+  getActiveReceivables,
 } from "./cases.service";
 export type { CasePage, CaseMutationArgs } from "./cases.service";
 
@@ -62,6 +66,10 @@ export type {
   CaseFormData,
   ServiceCaseMeta,
   CaseHeader,
+  CaseListItem,
+  CaseListParams,
+  CaseListResult,
+  CaseStatusFilter,
 } from "./cases.types";
 
 // --- Guards (isomorphic: error + Persian messages + read-time helpers) ------

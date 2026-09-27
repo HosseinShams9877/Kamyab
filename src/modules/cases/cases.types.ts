@@ -48,3 +48,50 @@ export type CaseHeader = {
   progressPassed: number;
   progressTotal: number;
 };
+
+// --- Case list (C-2 dashboard links / C-15 employee "my cases" / Phase 16) --
+// One parameterized list powers both the manager /cases page and the owner-
+// scoped /employee/cases page. Balance and lastActivity are read-time (rule 2).
+
+/** A row in the cases list. `balance` is null when no period has a total. */
+export type CaseListItem = {
+  id: string;
+  number: string;
+  customerName: string;
+  serviceName: string;
+  ownerName: string;
+  status: CaseStatus;
+  balance: number | null;
+  /** Jalali "YYYY/MM/DD" (ASCII digits — the page applies Persian digits). */
+  lastActivity: string;
+};
+
+/** The status filter values the list accepts. "active" = NEW | IN_PROGRESS. */
+export type CaseStatusFilter =
+  | ""
+  | "active"
+  | "NEW"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export type CaseListParams = {
+  q?: string;
+  status?: CaseStatusFilter;
+  /** Only cases with a positive outstanding balance (a computed filter). */
+  hasBalance?: boolean;
+  /** Only active cases with no activity past the stale threshold. */
+  stale?: boolean;
+  /** Manager-only optional narrowing to one owner; ignored for employees
+   *  (their view is already forced to their own by scopeByOwnership). */
+  ownerId?: string;
+  page?: number;
+};
+
+export type CaseListResult = {
+  items: CaseListItem[];
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+};

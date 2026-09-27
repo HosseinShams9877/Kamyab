@@ -31,6 +31,7 @@ export {
   renewPeriodTx,
   setPeriodStatusTx,
   getRenewalsView,
+  getRenewalDashboard,
   listReminderCandidates,
   listUnfollowedRenewals,
   abandonExpiredPeriods,

@@ -237,6 +237,9 @@ export type ListQuery = {
   status: boolean | null;
   city: string | null;
   sort: "newest" | "name" | "cases";
+  /** Restrict to customers who own at least one case owned by this employee
+   *  (C-15 "my customers"); omitted for the manager list. */
+  ownerId?: string;
   skip: number;
   take: number;
 };
@@ -246,6 +249,7 @@ function buildWhere(query: ListQuery): Prisma.CustomerWhereInput {
   if (query.type) where.type = query.type;
   if (query.status !== null) where.status = query.status;
   if (query.city) where.city = query.city;
+  if (query.ownerId) where.cases = { some: { ownerId: query.ownerId } };
   if (query.q) {
     where.OR = [
       { fullName: { contains: query.q } },

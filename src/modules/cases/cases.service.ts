@@ -12,7 +12,7 @@ import { getServicePaths, listDurations } from "@/modules/paths";
 import { listActiveCustomerOptions, saveCaseBirthInfoTx } from "@/modules/customers";
 import { listCaseOwnerOptions } from "@/modules/employees";
 import { getThresholds, listActiveCancellationReasons } from "@/modules/settings";
-import { can, type Authorizable } from "@/modules/permissions";
+import { can, scopeByOwnership, type Authorizable } from "@/modules/permissions";
 import {
   createRegistrationPeriodTx,
   getPeriodsForCase,
@@ -89,7 +89,11 @@ import type {
   CaseHeader,
   ServiceCaseMeta,
   OwnerOption,
+  CaseListItem,
+  CaseListParams,
+  CaseListResult,
 } from "./cases.types";
+import { toEnglishDigits } from "@/lib/digits";
 
 // Business logic for the cases domain (C-4 registration, C-5 page). The service
 // is the module's only cross-module entry point (rule 9): the service's
@@ -534,6 +538,171 @@ export async function listActiveCaseOptions(): Promise<
         : c.customer.fullName ?? "";
     return { id: c.id, number: c.number, label: name ? `${c.number} — ${name}` : c.number };
   });
+}
+
+// --- Case list, dashboard counts & receivables (C-2 / C-15 / Phase 16) ------
+// listCasesView powers both the manager /cases page and the owner-scoped
+// /employee/cases page — one query, scoped by scopeByOwnership (rule 3):
+// view_all → {} (a manager may optionally narrow to one owner), view_own →
+// { ownerId: user.id } (an employee only ever sees their own), no access → an
+// empty result. The dashboard counts + receivables reuse the same scope. Balance
+// is computed at read time (rule 2), mirroring the customers-service pattern.
+
+const CASE_PAGE_SIZE = 25;
+
+/** Balance across a case's periods: sum(totals) − sum(payments); null when no
+ *  period carries a total (the UI shows "—", never zero). Mirrors summarizeCase. */
+function caseBalance(
+  periods: { totalAmount: bigint | null; payments: { amount: bigint }[] }[],
+): number | null {
+  let anyTotal = false;
+  let totalSum = 0;
+  let paidSum = 0;
+  for (const p of periods) {
+    if (p.totalAmount !== null) {
+      anyTotal = true;
+      totalSum += Number(p.totalAmount);
+    }
+    for (const pay of p.payments) paidSum += Number(pay.amount);
+  }
+  return anyTotal ? totalSum - paidSum : null;
+}
+
+function listRowName(c: {
+  type: string;
+  fullName: string | null;
+  companyName: string | null;
+}): string {
+  return c.type === "LEGAL" ? c.companyName ?? "—" : c.fullName ?? "—";
+}
+
+function toCaseListItem(row: repo.CaseListRow): CaseListItem {
+  return {
+    id: row.id,
+    number: row.number,
+    customerName: listRowName(row.customer),
+    serviceName: row.service.name,
+    ownerName: row.owner.fullName,
+    status: row.status as CaseStatus,
+    balance: caseBalance(row.periods),
+    lastActivity: formatJalali(toJalali(row.lastActivityAt), { persianDigits: false }),
+  };
+}
+
+/** The base ownership filter for a cases query (rule 3), or null when the user
+ *  may not view cases at all. A manager (view_all → {}) may optionally narrow to
+ *  one owner; an employee (view_own) is always forced to their own. */
+function casesScope(
+  user: Authorizable,
+  ownerId?: string,
+): Prisma.CaseWhereInput | null {
+  const scope = scopeByOwnership(user, "cases");
+  if (scope === null) return null;
+  if ("ownerId" in scope) return scope; // employee: forced to own
+  return ownerId ? { ownerId } : {}; // manager: optional narrow
+}
+
+/** The cases list for /cases (manager) and /employee/cases (owner-scoped). */
+export async function listCasesView(
+  user: Authorizable,
+  params: CaseListParams,
+): Promise<CaseListResult> {
+  const base = casesScope(user, params.ownerId);
+  const page = Math.max(1, params.page ?? 1);
+  if (base === null) {
+    return { items: [], total: 0, page: 1, pageCount: 1, pageSize: CASE_PAGE_SIZE };
+  }
+
+  const where: Prisma.CaseWhereInput = { ...base };
+  const status = params.status ?? "";
+  if (status === "active") where.status = { in: ["NEW", "IN_PROGRESS"] };
+  else if (status) where.status = status;
+
+  const q = toEnglishDigits((params.q ?? "").trim());
+  if (q) {
+    where.OR = [
+      { number: { contains: q } },
+      { customer: { is: { fullName: { contains: q } } } },
+      { customer: { is: { companyName: { contains: q } } } },
+      { service: { is: { name: { contains: q } } } },
+    ];
+  }
+
+  if (params.stale) {
+    const { staleDays } = await getThresholds();
+    where.status = { in: ["NEW", "IN_PROGRESS"] };
+    where.lastActivityAt = { lt: new Date(Date.now() - staleDays * DAY_MS) };
+  }
+
+  // hasBalance is a computed filter, so that path loads every matching row,
+  // filters by balance > 0, and paginates in memory. Every other path lets the
+  // DB paginate.
+  if (params.hasBalance) {
+    const rows = await repo.queryCaseRows(where);
+    const items = rows
+      .map(toCaseListItem)
+      .filter((c) => c.balance !== null && c.balance > 0);
+    const total = items.length;
+    const pageCount = Math.max(1, Math.ceil(total / CASE_PAGE_SIZE));
+    const safePage = Math.min(page, pageCount);
+    const start = (safePage - 1) * CASE_PAGE_SIZE;
+    return {
+      items: items.slice(start, start + CASE_PAGE_SIZE),
+      total,
+      page: safePage,
+      pageCount,
+      pageSize: CASE_PAGE_SIZE,
+    };
+  }
+
+  const total = await repo.countCaseRows(where);
+  const pageCount = Math.max(1, Math.ceil(total / CASE_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const rows = await repo.queryCaseRows(where, {
+    skip: (safePage - 1) * CASE_PAGE_SIZE,
+    take: CASE_PAGE_SIZE,
+  });
+  return {
+    items: rows.map(toCaseListItem),
+    total,
+    page: safePage,
+    pageCount,
+    pageSize: CASE_PAGE_SIZE,
+  };
+}
+
+/** Active-case count for the dashboard (rule 2), scoped like the list. */
+export async function countActiveCases(user: Authorizable): Promise<number> {
+  const scope = scopeByOwnership(user, "cases");
+  if (scope === null) return 0;
+  const ownerId = "ownerId" in scope ? scope.ownerId : undefined;
+  return repo.countActiveCases(ownerId);
+}
+
+/** Stale-case count (active, no activity past the stale threshold) for the
+ *  dashboard, scoped like the list. */
+export async function countStaleCases(user: Authorizable): Promise<number> {
+  const scope = scopeByOwnership(user, "cases");
+  if (scope === null) return 0;
+  const ownerId = "ownerId" in scope ? scope.ownerId : undefined;
+  const { staleDays } = await getThresholds();
+  return repo.countStaleCases(new Date(Date.now() - staleDays * DAY_MS), ownerId);
+}
+
+/** Total outstanding receivables: the sum of POSITIVE balances across active
+ *  cases (rule 2), scoped like the list. Credit balances don't net it down. */
+export async function getActiveReceivables(user: Authorizable): Promise<number> {
+  const scope = scopeByOwnership(user, "cases");
+  if (scope === null) return 0;
+  const where: Prisma.CaseWhereInput = { status: { in: ["NEW", "IN_PROGRESS"] } };
+  if ("ownerId" in scope) where.ownerId = scope.ownerId;
+  const rows = await repo.queryCaseRows(where);
+  let sum = 0;
+  for (const row of rows) {
+    const bal = caseBalance(row.periods);
+    if (bal !== null && bal > 0) sum += bal;
+  }
+  return sum;
 }
 
 // --- Renewal, follow-up & abandonment (C-9 / C-10 / Phase 13) ---------------

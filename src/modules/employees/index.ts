@@ -18,6 +18,7 @@ export {
   getPermissionsView,
   updatePermissions,
   getWorkload,
+  listWorkloads,
   deactivateEmployee,
 } from "./employees.service";
 
@@ -43,6 +44,7 @@ export type {
   DepartmentOption,
   EmployeeOption,
   Workload,
+  WorkloadRow,
   PermissionsView,
   DeactivationResult,
 } from "./employees.types";

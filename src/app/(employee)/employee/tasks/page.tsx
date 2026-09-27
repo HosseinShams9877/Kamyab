@@ -11,22 +11,20 @@ import {
 } from "@/modules/tasks";
 import { listActiveResults } from "@/modules/followups";
 
-// The tasks page (C-11): seven ownership-scoped views, create/edit, record-result,
-// archive and delete. Server component — it authorizes (rule 3), reads through the
-// services, and hands the client panel already-scoped rows + the capability flags.
-// Dynamic: the active tab comes from the query string and "today"/"overdue" depend
-// on the current date, so the view is computed per request (rule 2).
+// Employee "my tasks" panel (C-15). Identical to the manager /tasks page — the
+// tasks service owner-scopes an employee (tasks.view_own) to their own tasks —
+// except the tab links resolve against /employee/tasks (via TasksPanel's
+// basePath) so navigation stays inside the employee panel.
 export const dynamic = "force-dynamic";
 
-export default async function TasksPage({
+export default async function EmployeeTasksPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
   if (!can(user, "tasks.view_all") && !can(user, "tasks.view_own")) {
-    redirect("/dashboard");
+    redirect("/employee");
   }
 
   const { tab: tabParam } = await searchParams;
@@ -53,7 +51,7 @@ export default async function TasksPage({
 
   return (
     <main className="mx-auto w-full px-4 py-10">
-      <h1 className="mb-6 text-2xl font-bold text-text">کارها</h1>
+      <h1 className="mb-6 text-2xl font-bold text-text">کارهای من</h1>
       <TasksPanel
         tasks={tasks}
         tab={tab}
@@ -62,6 +60,7 @@ export default async function TasksPage({
         results={results.map((r) => ({ id: r.id, title: r.title }))}
         caps={caps}
         viewAll={viewAll}
+        basePath="/employee/tasks"
       />
     </main>
   );
