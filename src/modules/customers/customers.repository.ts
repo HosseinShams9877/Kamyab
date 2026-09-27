@@ -236,9 +236,10 @@ export type ListQuery = {
   type: CustomerType | null;
   status: boolean | null;
   city: string | null;
+  serviceId: string | null;
   sort: "newest" | "name" | "cases";
-  /** Restrict to customers who own at least one case owned by this employee
-   *  (C-15 "my customers"); omitted for the manager list. */
+  /** Restrict to customers who own at least one ACTIVE case owned by this
+   *  employee (C-15 "my customers"); omitted for the manager list. */
   ownerId?: string;
   skip: number;
   take: number;
@@ -249,7 +250,19 @@ function buildWhere(query: ListQuery): Prisma.CustomerWhereInput {
   if (query.type) where.type = query.type;
   if (query.status !== null) where.status = query.status;
   if (query.city) where.city = query.city;
-  if (query.ownerId) where.cases = { some: { ownerId: query.ownerId } };
+
+  // The service and owner filters both apply to ACTIVE cases only (C-3 / C-15):
+  // a customer matches if ANY of their active cases has the chosen owner or
+  // service. A customer with several active cases matches on any one of them.
+  const activeCaseSome: Prisma.CaseWhereInput = {
+    status: { in: [...ACTIVE_CASE_STATUSES] },
+  };
+  if (query.ownerId) activeCaseSome.ownerId = query.ownerId;
+  if (query.serviceId) activeCaseSome.serviceId = query.serviceId;
+  if (query.ownerId || query.serviceId) {
+    where.cases = { some: activeCaseSome };
+  }
+
   if (query.q) {
     where.OR = [
       { fullName: { contains: query.q } },
@@ -321,6 +334,114 @@ export async function listCities(): Promise<string[]> {
     select: { city: true },
   });
   return rows.map((r) => r.city).filter((c): c is string => !!c && c.trim() !== "");
+}
+
+// --- Per-customer extras for the list (C-3) ---------------------------------
+
+/** Active-case service names per customer (badge column). */
+export async function findActiveServiceNamesByCustomer(
+  ids: string[],
+): Promise<Record<string, string[]>> {
+  if (ids.length === 0) return {};
+  const rows = await prisma.case.findMany({
+    where: {
+      customerId: { in: ids },
+      status: { in: [...ACTIVE_CASE_STATUSES] },
+    },
+    select: { customerId: true, service: { select: { name: true } } },
+  });
+  const map: Record<string, string[]> = {};
+  for (const r of rows) {
+    (map[r.customerId] ??= []).push(r.service.name);
+  }
+  return map;
+}
+
+/** The owner of each customer's most recent case (any status). */
+export async function findLatestOwnerByCustomer(
+  ids: string[],
+): Promise<Record<string, string>> {
+  if (ids.length === 0) return {};
+  const rows = await prisma.case.findMany({
+    where: { customerId: { in: ids } },
+    orderBy: { createdAt: "desc" },
+    select: { customerId: true, owner: { select: { fullName: true } } },
+  });
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    if (!map[r.customerId]) map[r.customerId] = r.owner.fullName;
+  }
+  return map;
+}
+
+/** The most recent follow-up date per customer (across all their cases). */
+export async function findLatestFollowUpByCustomer(
+  ids: string[],
+): Promise<Record<string, Date>> {
+  if (ids.length === 0) return {};
+  const rows = await prisma.followUp.findMany({
+    where: { case: { customerId: { in: ids } } },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, case: { select: { customerId: true } } },
+  });
+  const map: Record<string, Date> = {};
+  for (const r of rows) {
+    if (!map[r.case.customerId]) map[r.case.customerId] = r.createdAt;
+  }
+  return map;
+}
+
+// --- Stats for the customer list header (C-3) -------------------------------
+
+export async function countCustomers(): Promise<number> {
+  return prisma.customer.count();
+}
+
+export async function countCustomersByStatus(status: boolean): Promise<number> {
+  return prisma.customer.count({ where: { status } });
+}
+
+/**
+ * Distinct customers who have at least one ACTIVE period expiring within the
+ * given window (today .. today+days). Computed at read time (rule 2).
+ */
+export async function countCustomersNearRenewal(days: number): Promise<number> {
+  const today = new Date();
+  const until = new Date(today);
+  until.setDate(until.getDate() + days);
+  const rows = await prisma.period.findMany({
+    where: {
+      status: "ACTIVE",
+      expiryDate: { not: null, gte: today, lte: until },
+    },
+    select: { case: { select: { customerId: true } } },
+  });
+  const ids = new Set(rows.map((r) => r.case.customerId));
+  return ids.size;
+}
+
+// --- Filter dropdown options ------------------------------------------------
+
+/** All active services, for the list's service filter dropdown. */
+export async function listActiveServiceOptions(): Promise<
+  { id: string; name: string }[]
+> {
+  return prisma.service.findMany({
+    where: { status: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+}
+
+/** All active employees, for the list's employee filter dropdown. */
+export async function listActiveEmployeeOptions(): Promise<
+  { id: string; fullName: string }[]
+> {
+  return prisma.employee.findMany({
+    where: { status: true },
+    orderBy: { fullName: "asc" },
+    select: { id: true, fullName: true },
+  });
 }
 
 // --- Customer page: cases + follow-ups -------------------------------------

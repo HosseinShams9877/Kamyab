@@ -15,6 +15,32 @@ export type CustomerListItem = {
   city: string | null;
   activeCases: number;
   status: boolean;
+  // Names of the services on this customer's ACTIVE cases (badge display).
+  activeServiceNames: string[];
+  // The owner of the customer's most recent case, if any.
+  ownerName: string | null;
+  // The date of the customer's most recent follow-up (Jalali "YYYY/MM/DD"), if any.
+  lastFollowUpAt: string | null;
+};
+
+// The four headline numbers on top of the customer list (C-3).
+export type CustomerStats = {
+  total: number;
+  active: number;
+  nearRenewal: number; // customers with an active period expiring within 30 days
+  inactive: number;
+};
+
+// A pick-list entry for the "service" filter dropdown.
+export type ServiceFilterOption = {
+  id: string;
+  name: string;
+};
+
+// A pick-list entry for the "employee" filter dropdown.
+export type EmployeeFilterOption = {
+  id: string;
+  fullName: string;
 };
 
 // The full record used to prefill the edit form and render the top card.
@@ -93,8 +119,9 @@ export type CustomerListParams = {
   type?: CustomerType | "";
   status?: "active" | "inactive" | "";
   city?: string;
+  serviceId?: string;
   sort?: CustomerSort;
-  /** Restrict to customers related to this employee's cases (C-15). */
+  /** Restrict to customers related to this employee's active cases (C-15). */
   ownerId?: string;
   page?: number;
 };

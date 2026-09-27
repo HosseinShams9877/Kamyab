@@ -30,7 +30,7 @@ export default async function ManagerLayout({
     },
     (can(user, "tasks.view_all") || can(user, "tasks.view_own")) && {
       href: "/tasks",
-      label: "کارها",
+      label: "پیگیری ها و کارها",
     },
     can(user, "renewals.view") && { href: "/renewals", label: "تمدیدها" },
     can(user, "services.view") && { href: "/services", label: "خدمات" },

@@ -92,19 +92,17 @@ import type {
   CaseListItem,
   CaseListParams,
   CaseListResult,
+  CaseStats,
+  ServiceFilterOption,
+  OwnerFilterOption,
 } from "./cases.types";
 import { toEnglishDigits } from "@/lib/digits";
 
 // Business logic for the cases domain (C-4 registration, C-5 page). The service
-// is the module's only cross-module entry point (rule 9): the service's
-// renewable flag + name come from @/modules/services, the initial-path stages
-// and validity durations from @/modules/paths, the customer birth-info patch
-// from @/modules/customers, and the first period + copied stages from
-// @/modules/periods. The single registration write is one transaction (rule 4),
-// owned by the repository; this service prepares its inputs, builds the Persian
-// notification + JSON history payloads, and retries on a number-collision race.
+// is the module's only cross-module entry point (rule 9).
 
 const CREATE_RETRIES = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function isNumberCollision(e: unknown): boolean {
   return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
@@ -118,8 +116,6 @@ function displayName(row: repo.CaseCoreRow["customer"]): string {
 
 // --- Case-registration form data (C-4) --------------------------------------
 
-/** The pick lists the registration form renders, plus an optional prefilled
- *  customer (from the "register case" button on a customer page). */
 export async function getCaseFormData(
   presetCustomerId: string | null,
 ): Promise<CaseFormData> {
@@ -147,12 +143,6 @@ export async function getCaseFormData(
   };
 }
 
-/**
- * Live meta for a picked service (C-4): whether it is renewable (drives the
- * duration/expiry section), how many initial stages it has (the hint), and its
- * active validity durations with the default marked. Null when the service is
- * unknown or inactive.
- */
 export async function getServiceCaseMeta(
   serviceId: string,
 ): Promise<ServiceCaseMeta | null> {
@@ -185,14 +175,6 @@ type RegisterResult =
   | { ok: true; id: string; number: string }
   | { ok: false; field?: string; message: string };
 
-/**
- * Register a case (C-4). Validates the three references and, for a renewable
- * service, the chosen validity duration; computes the expiry by Jalali calendar
- * months (rule: never add fixed days); copies the service's initial path stages;
- * then writes the case + first period + stages, backfills the customer's
- * birth-info, notifies the owner, and records history — all in one transaction
- * (rule 4). A number-collision race is retried.
- */
 export async function registerCase(
   actorId: string,
   input: CaseCreateInput,
@@ -217,8 +199,6 @@ export async function registerCase(
   }
   const startDate = toGregorianDate(startJ);
 
-  // Renewable services carry a validity duration and an expiry; non-renewable
-  // ones have neither (the period is still created, with a null expiry).
   let expiryDate: Date | null = null;
   if (service.renewable) {
     const durations = (await listDurations(input.serviceId)).filter((d) => d.active);
@@ -285,7 +265,7 @@ export async function registerCase(
       const { id, number } = await repo.createCaseTx(args);
       return { ok: true, id, number };
     } catch (e) {
-      if (isNumberCollision(e)) continue; // number race — regenerate and retry
+      if (isNumberCollision(e)) continue;
       throw e;
     }
   }
@@ -303,11 +283,6 @@ export type CasePage = {
   current: PeriodRow | null;
 };
 
-/**
- * The case page (C-5). The header is fully live: start/expiry come from the
- * current period, daysRemaining and progress are computed at read time (rule 2),
- * never stored. Returns null when the case does not exist.
- */
 export async function getCasePage(id: string): Promise<CasePage | null> {
   const core = await repo.findCaseCore(id);
   if (!core) return null;
@@ -336,34 +311,19 @@ export async function getCasePage(id: string): Promise<CasePage | null> {
 }
 
 // --- Stage engine (C-6 / Phase 10) ------------------------------------------
-// Authorization is server-side (rule 3): the status transitions need
-// `stages.advance`, the structural ops (add / delete / reorder an exceptional
-// stage) need `stages.add_exceptional`, and BOTH are scoped to the case via
-// `cases.edit` on the case record — an employee may act only on their own
-// cases unless they hold cases.view_all. The page computes the same booleans to
-// show/hide buttons; these functions are the real gate a direct request hits.
 
-/** May the user run the six stage actions on this case? */
 export function canEditStages(user: Authorizable, ownerId: string): boolean {
   return can(user, "stages.advance") && can(user, "cases.edit", { ownerId });
 }
 
-/** May the user add / delete / reorder an exceptional stage on this case? */
 export function canAddStages(user: Authorizable, ownerId: string): boolean {
   return can(user, "stages.add_exceptional") && can(user, "cases.edit", { ownerId });
 }
 
 type StageResult = { ok: true } | { ok: false; code: 403 | 404 | 409; message: string };
 
-/** Transition ops (start/done/reject/not_needed/reopen) promote a NEW case to
- *  IN_PROGRESS; a note edit does not (no stage progressed). */
 const PROMOTING_OPS = new Set(["start", "done", "reject", "not_needed", "reopen"]);
 
-/**
- * Run one of the six stage actions (C-6). Reads the stage's state + its owning
- * case, authorizes, blocks a cancelled case, validates the transition, then
- * applies the mutation and every side effect in one transaction (rule 4).
- */
 export async function runStageAction(
   user: Authorizable,
   stageId: string,
@@ -404,7 +364,6 @@ export async function runStageAction(
   return { ok: true };
 }
 
-/** Add an exceptional stage to the case's current period (C-6). */
 export async function addExceptionalStage(
   user: Authorizable,
   input: AddStageInput,
@@ -433,8 +392,6 @@ export async function addExceptionalStage(
   return { ok: true };
 }
 
-/** Delete an exceptional, never-acted stage (C-6: an acted stage can only be set
- *  to Not-Needed). */
 export async function deleteStage(user: Authorizable, stageId: string): Promise<StageResult> {
   const ctx = await getStageForAction(stageId);
   if (!ctx) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
@@ -465,8 +422,6 @@ export async function deleteStage(user: Authorizable, stageId: string): Promise<
   return { ok: true };
 }
 
-/** Reorder an exceptional stage one position (C-6: exceptional stages are
- *  reorderable; the defined path order stays fixed). */
 export async function moveStage(
   user: Authorizable,
   stageId: string,
@@ -499,17 +454,9 @@ export async function moveStage(
 }
 
 // --- Financial seams (C-7 / Phase 11) ---------------------------------------
-// The payments module owns the Payment table and every financial rule; it needs
-// two things from cases that only the cases module may provide (rule 9): the
-// case's ownership/status (to authorize a financial write, record-scoped like
-// the stage engine) and the shared case-mutation transaction (Case.lastActivityAt
-// + ActivityHistory are cases-owned). A payment never promotes a NEW case, so
-// callers pass promoteFromNew: false.
 
 export type CaseMutationArgs = repo.CaseMutationTxArgs;
 
-/** The case's ownership + status, for authorizing a financial action. Null when
- *  the case does not exist. */
 export async function getCaseOwnership(
   caseId: string,
 ): Promise<{ ownerId: string; status: CaseStatus; number: string } | null> {
@@ -518,15 +465,10 @@ export async function getCaseOwnership(
   return { ownerId: kase.ownerId, status: kase.status as CaseStatus, number: kase.number };
 }
 
-/** Run a case mutation (an injected payment/period-total write) with the case's
- *  last-activity bump + history, in one transaction (rule 4). */
 export function runCaseMutation(args: CaseMutationArgs): Promise<void> {
   return repo.caseMutationTx(args);
 }
 
-/** Active cases (NEW | IN_PROGRESS) as options for the task form's related-case
- *  picker (C-11 — a task attaches only to an active case). The label pairs the
- *  case number with the customer's display name (type-dependent). */
 export async function listActiveCaseOptions(): Promise<
   { id: string; number: string; label: string }[]
 > {
@@ -541,17 +483,9 @@ export async function listActiveCaseOptions(): Promise<
 }
 
 // --- Case list, dashboard counts & receivables (C-2 / C-15 / Phase 16) ------
-// listCasesView powers both the manager /cases page and the owner-scoped
-// /employee/cases page — one query, scoped by scopeByOwnership (rule 3):
-// view_all → {} (a manager may optionally narrow to one owner), view_own →
-// { ownerId: user.id } (an employee only ever sees their own), no access → an
-// empty result. The dashboard counts + receivables reuse the same scope. Balance
-// is computed at read time (rule 2), mirroring the customers-service pattern.
 
-const CASE_PAGE_SIZE = 25;
+const CASE_PAGE_SIZE = 10;
 
-/** Balance across a case's periods: sum(totals) − sum(payments); null when no
- *  period carries a total (the UI shows "—", never zero). Mirrors summarizeCase. */
 function caseBalance(
   periods: { totalAmount: bigint | null; payments: { amount: bigint }[] }[],
 ): number | null {
@@ -576,6 +510,22 @@ function listRowName(c: {
   return c.type === "LEGAL" ? c.companyName ?? "—" : c.fullName ?? "—";
 }
 
+/** The first OPEN stage of the case's ACTIVE period, or null when all stages
+ *  are closed / the period has no path. Computed at read time (rule 2). */
+function currentStageTitle(
+  periods: {
+    status: string;
+    stages: { order: number; status: string; title: string }[];
+  }[],
+): string | null {
+  const active = periods.find((p) => p.status === "ACTIVE");
+  if (!active || active.stages.length === 0) return null;
+  const open = active.stages.find(
+    (s) => s.status === "PENDING" || s.status === "IN_PROGRESS" || s.status === "REJECTED",
+  );
+  return open ? open.title : null;
+}
+
 function toCaseListItem(row: repo.CaseListRow): CaseListItem {
   return {
     id: row.id,
@@ -585,24 +535,21 @@ function toCaseListItem(row: repo.CaseListRow): CaseListItem {
     ownerName: row.owner.fullName,
     status: row.status as CaseStatus,
     balance: caseBalance(row.periods),
+    currentStageTitle: currentStageTitle(row.periods),
     lastActivity: formatJalali(toJalali(row.lastActivityAt), { persianDigits: false }),
   };
 }
 
-/** The base ownership filter for a cases query (rule 3), or null when the user
- *  may not view cases at all. A manager (view_all → {}) may optionally narrow to
- *  one owner; an employee (view_own) is always forced to their own. */
 function casesScope(
   user: Authorizable,
   ownerId?: string,
 ): Prisma.CaseWhereInput | null {
   const scope = scopeByOwnership(user, "cases");
   if (scope === null) return null;
-  if ("ownerId" in scope) return scope; // employee: forced to own
-  return ownerId ? { ownerId } : {}; // manager: optional narrow
+  if ("ownerId" in scope) return scope;
+  return ownerId ? { ownerId } : {};
 }
 
-/** The cases list for /cases (manager) and /employee/cases (owner-scoped). */
 export async function listCasesView(
   user: Authorizable,
   params: CaseListParams,
@@ -617,6 +564,10 @@ export async function listCasesView(
   const status = params.status ?? "";
   if (status === "active") where.status = { in: ["NEW", "IN_PROGRESS"] };
   else if (status) where.status = status;
+
+  if (params.serviceId && params.serviceId.trim()) {
+    where.serviceId = params.serviceId.trim();
+  }
 
   const q = toEnglishDigits((params.q ?? "").trim());
   if (q) {
@@ -634,9 +585,6 @@ export async function listCasesView(
     where.lastActivityAt = { lt: new Date(Date.now() - staleDays * DAY_MS) };
   }
 
-  // hasBalance is a computed filter, so that path loads every matching row,
-  // filters by balance > 0, and paginates in memory. Every other path lets the
-  // DB paginate.
   if (params.hasBalance) {
     const rows = await repo.queryCaseRows(where);
     const items = rows
@@ -671,7 +619,6 @@ export async function listCasesView(
   };
 }
 
-/** Active-case count for the dashboard (rule 2), scoped like the list. */
 export async function countActiveCases(user: Authorizable): Promise<number> {
   const scope = scopeByOwnership(user, "cases");
   if (scope === null) return 0;
@@ -679,8 +626,6 @@ export async function countActiveCases(user: Authorizable): Promise<number> {
   return repo.countActiveCases(ownerId);
 }
 
-/** Stale-case count (active, no activity past the stale threshold) for the
- *  dashboard, scoped like the list. */
 export async function countStaleCases(user: Authorizable): Promise<number> {
   const scope = scopeByOwnership(user, "cases");
   if (scope === null) return 0;
@@ -689,8 +634,6 @@ export async function countStaleCases(user: Authorizable): Promise<number> {
   return repo.countStaleCases(new Date(Date.now() - staleDays * DAY_MS), ownerId);
 }
 
-/** Total outstanding receivables: the sum of POSITIVE balances across active
- *  cases (rule 2), scoped like the list. Credit balances don't net it down. */
 export async function getActiveReceivables(user: Authorizable): Promise<number> {
   const scope = scopeByOwnership(user, "cases");
   if (scope === null) return 0;
@@ -705,44 +648,66 @@ export async function getActiveReceivables(user: Authorizable): Promise<number> 
   return sum;
 }
 
+// --- Case list stats (C-2 style, /cases header) -----------------------------
+
+/** The four headline numbers above the case list, scoped like the list. */
+export async function getCaseStats(user: Authorizable): Promise<CaseStats> {
+  const scope = scopeByOwnership(user, "cases");
+  if (scope === null) {
+    return { total: 0, active: 0, waitingAction: 0, completedThisMonth: 0 };
+  }
+  const ownerId = "ownerId" in scope ? scope.ownerId : undefined;
+
+  const todayJ = todayJalali();
+  const monthStart = toGregorianDate({ jy: todayJ.jy, jm: todayJ.jm, jd: 1 });
+  const monthEnd = toGregorianDate(addMonths({ jy: todayJ.jy, jm: todayJ.jm, jd: 1 }, 1));
+
+  const totalWhere: Prisma.CaseWhereInput = ownerId ? { ownerId } : {};
+  const activeWhere: Prisma.CaseWhereInput = {
+    status: { in: ["NEW", "IN_PROGRESS"] },
+    ...(ownerId ? { ownerId } : {}),
+  };
+
+  const [total, active, waitingAction, completedThisMonth] = await Promise.all([
+    repo.countCaseRows(totalWhere),
+    repo.countCaseRows(activeWhere),
+    repo.countActiveWithOpenStage(ownerId),
+    repo.countCompletedBetween(monthStart, monthEnd, ownerId),
+  ]);
+
+  return { total, active, waitingAction, completedThisMonth };
+}
+
+/** Active services for the list's service filter dropdown. */
+export async function listServiceFilterOptions(): Promise<ServiceFilterOption[]> {
+  const rows = await listActiveServiceOptions();
+  return rows.map((s) => ({ id: s.id, name: s.name }));
+}
+
+/** Active employees for the list's owner filter dropdown. */
+export async function listOwnerFilterOptions(): Promise<OwnerFilterOption[]> {
+  const rows = await listCaseOwnerOptions();
+  return rows.map((o) => ({ id: o.id, fullName: o.fullName }));
+}
+
 // --- Renewal, follow-up & abandonment (C-9 / C-10 / Phase 13) ---------------
-// A renewal is a case-level write that spans the periods module: the cases
-// service authorizes (record-scoped, rule 3), validates the duration + start,
-// computes the new expiry by Jalali months (rule 2 — never fixed days), copies
-// the service's RENEWAL path stages, and runs periods' renewPeriodTx inside
-// runCaseMutation so the close-previous / create-next / copy-stages write plus
-// Case.lastActivityAt + the ActivityHistory row are ONE transaction (rule 4).
-// The manual abandon/restore controls (Phase 15 automates abandonment) and the
-// renewal follow-up (which sets Period.followUpStatus + records a note, but
-// CANNOT create a FollowUp — resultId is a required FK) follow the same shape.
-// `renewals.abandon` has no dedicated permission key, so Abandon is gated under
-// `renewals.register`; Restore under `renewals.restore`.
 
 type RenewalResult =
   | { ok: true }
   | { ok: false; code: 403 | 404 | 409 | 422; message: string };
 
-/** May the user register a renewal on this case? */
 export function canRegisterRenewal(user: Authorizable, ownerId: string): boolean {
   return can(user, "renewals.register") && can(user, "cases.edit", { ownerId });
 }
 
-/** May the user record a renewal follow-up on this case? */
 export function canRecordRenewalFollowUp(user: Authorizable, ownerId: string): boolean {
   return can(user, "renewals.record_followup") && can(user, "cases.edit", { ownerId });
 }
 
-/** May the user restore an abandoned period on this case? */
 export function canRestore(user: Authorizable, ownerId: string): boolean {
   return can(user, "renewals.restore") && can(user, "cases.edit", { ownerId });
 }
 
-/**
- * Live meta for the renewal form (C-9): whether the case's service is renewable,
- * its active validity durations, and the default start date (the current active
- * period's expiry — the new span begins where the old one ends). Null when the
- * case does not exist.
- */
 export async function getRenewalMeta(caseId: string): Promise<RenewalMeta | null> {
   const kase = await repo.findCaseForRenewal(caseId);
   if (!kase) return null;
@@ -769,16 +734,6 @@ export async function getRenewalMeta(caseId: string): Promise<RenewalMeta | null
   };
 }
 
-// RENEWAL_ACTIONS_PLACEHOLDER
-
-/**
- * Register a renewal (C-9). Authorizes (record-scoped), blocks a cancelled case,
- * checks the service is renewable and the chosen duration is valid, computes the
- * new expiry by Jalali months, copies the RENEWAL path stages, then closes the
- * previous period (→ RENEWED) and creates the next ACTIVE period — all in one
- * transaction (rule 4). The reminder cycle restarts automatically (SentReminder
- * is keyed by the new periodId).
- */
 export async function registerRenewal(
   user: Authorizable,
   input: RenewalInput,
@@ -854,14 +809,6 @@ export async function registerRenewal(
   return { ok: true };
 }
 
-// RENEWAL_FOLLOWUP_PLACEHOLDER
-
-/**
- * Record a renewal follow-up (C-9). Sets the active period's follow-up status and
- * records the note in ActivityHistory — it does NOT create a FollowUp row (that
- * requires a result FK, C-11). One transaction (rule 4). Authorization is
- * record-scoped: `renewals.record_followup` + `cases.edit` on the owner.
- */
 export async function recordRenewalFollowUp(
   user: Authorizable,
   input: RenewalFollowUpInput,
@@ -897,12 +844,6 @@ export async function recordRenewalFollowUp(
   return { ok: true };
 }
 
-/**
- * Manually abandon an expired, past-threshold period (C-10). The engine automates
- * this in Phase 15; here a user with `renewals.register` on the case may do it
- * when the abandonment rule holds (isAbandonable — expired past the threshold, or
- * "Not interested" immediately). One transaction (rule 4).
- */
 export async function abandonPeriod(
   user: Authorizable,
   input: PeriodActionInput,
@@ -942,10 +883,6 @@ export async function abandonPeriod(
   return { ok: true };
 }
 
-/**
- * Restore an abandoned period (C-10): ABANDONED → ACTIVE, recorded in history.
- * Authorization is record-scoped: `renewals.restore` + `cases.edit` on the owner.
- */
 export async function restorePeriod(
   user: Authorizable,
   input: PeriodActionInput,
@@ -973,20 +910,7 @@ export async function restorePeriod(
 }
 
 // --- Case cancellation & restore (C-8 / Phase 14) ---------------------------
-// Cancelling a case is a case-level write that fans out across three modules in
-// ONE transaction (rule 4): the Case row (status + who/why/when), its active
-// period (→ CANCELLED, via the periods seam), and every open task of the case
-// (→ CANCELLED + a notification per owner, via the tasks seam). The tasks seam is
-// INJECTED by the API route rather than imported here: tasks already depends on
-// cases (listActiveCaseOptions), so a cases→tasks import would cycle (rule 9).
-// The path is "locked" purely as a consequence of CANCELLED status — the stage
-// service already 409s on a cancelled case, so no stage write is needed here.
-// Payments, the total and the balance are deliberately left untouched, and the
-// case is never deleted (it stays in search, customer history and reports).
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The tasks-module seam the cancel transaction injects (see the note above). */
 type CancelOpenTasksTxFn = (
   tx: Prisma.TransactionClient,
   args: { caseId: string; message: string },
@@ -996,21 +920,14 @@ type CancelRestoreResult =
   | { ok: true }
   | { ok: false; code: 403 | 404 | 409 | 422; message: string };
 
-/** May the user cancel this case? `cases.cancel` scoped by `cases.edit` on the
- *  owner (rule 3) — the API route re-checks; the page uses it to show the button. */
 export function canCancelCase(user: Authorizable, ownerId: string): boolean {
   return can(user, "cases.cancel") && can(user, "cases.edit", { ownerId });
 }
 
-/** May the user restore this cancelled case? MANAGER ONLY (C-8) — SUPERVISOR
- *  holds `cases.restore` by default, so the role gate is the defining rule. */
 export function canRestoreCase(user: Authorizable, role: Role, ownerId: string): boolean {
   return role === "MANAGER" && can(user, "cases.restore") && can(user, "cases.edit", { ownerId });
 }
 
-/** The cancellation detail for a cancelled case's header (C-8): the Jalali date
- *  (ASCII "YYYY/MM/DD" — the page applies Persian digits), reason title, note and
- *  canceller name. Null when the case does not exist. */
 export async function getCancellationDetail(caseId: string): Promise<{
   date: string | null;
   reasonTitle: string | null;
@@ -1027,14 +944,6 @@ export async function getCancellationDetail(caseId: string): Promise<{
   };
 }
 
-/**
- * Cancel a case (C-8). Authorizes (record-scoped), blocks an already-cancelled or
- * completed case, and re-validates the reason against the active list (rule 3).
- * Then, in one transaction: mark the case CANCELLED with who/why/when, cancel its
- * active period, and cancel + notify every open task (the injected tasks seam),
- * plus the case last-activity bump and a history record. The Persian task
- * notification text is built here (never in the repository/seam).
- */
 export async function cancelCase(
   user: Authorizable,
   input: CaseCancelInput,
@@ -1084,12 +993,6 @@ export async function cancelCase(
   return { ok: true };
 }
 
-/**
- * Restore a cancelled case (C-8) — MANAGER ONLY. Sets the case back to
- * IN_PROGRESS (clearing the cancellation fields) and reactivates the period that
- * was cancelled alongside it (the current, highest-index one, only if CANCELLED),
- * in one transaction with the history record.
- */
 export async function restoreCase(
   user: Authorizable,
   role: Role,
@@ -1121,12 +1024,6 @@ export async function restoreCase(
   return { ok: true };
 }
 
-/**
- * The cancellation report (B-5): count of cancelled cases in a Jalali date range,
- * broken down by reason (desc by count). The `to` day is inclusive (the query ends
- * at the next midnight). Returns null when either bound is not a valid Jalali date
- * (the page validates first and falls back to a default range).
- */
 export async function getCancellationReport(
   fromStr: string,
   toStr: string,

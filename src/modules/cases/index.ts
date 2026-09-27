@@ -37,6 +37,9 @@ export {
   countActiveCases,
   countStaleCases,
   getActiveReceivables,
+  getCaseStats,
+  listServiceFilterOptions,
+  listOwnerFilterOptions,
 } from "./cases.service";
 export type { CasePage, CaseMutationArgs } from "./cases.service";
 
@@ -70,6 +73,9 @@ export type {
   CaseListParams,
   CaseListResult,
   CaseStatusFilter,
+  CaseStats,
+  ServiceFilterOption,
+  OwnerFilterOption,
 } from "./cases.types";
 
 // --- Guards (isomorphic: error + Persian messages + read-time helpers) ------
@@ -81,6 +87,7 @@ export { CaseForm } from "./components/case-form";
 export { CaseTabs } from "./components/case-tabs";
 export { CaseCancelDialog } from "./components/case-cancel-dialog";
 export { CaseRestoreButton } from "./components/case-restore-button";
+export { CasesTable } from "./components/cases-table";
 
 // --- Presentation labels (isomorphic) ---------------------------------------
 export { CASE_STATUS_LABELS, CASE_STATUS_BADGE, stageCountHint } from "./lib/labels";

@@ -310,6 +310,7 @@ model Task {
   status      String // TaskStatus: OPEN | COMPLETED | CANCELLED
   note        String? // up to 500
   closedAt    DateTime? // archive threshold counts from here
+  dueTime String? // "HH:MM" — optional time of day
   archivedAt  DateTime? // set when archived (auto or manual)
   createdById String
   createdBy   Employee  @relation("TaskCreatedBy", fields: [createdById], references: [id])

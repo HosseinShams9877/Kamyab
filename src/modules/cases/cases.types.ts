@@ -50,10 +50,10 @@ export type CaseHeader = {
 };
 
 // --- Case list (C-2 dashboard links / C-15 employee "my cases" / Phase 16) --
-// One parameterized list powers both the manager /cases page and the owner-
-// scoped /employee/cases page. Balance and lastActivity are read-time (rule 2).
 
-/** A row in the cases list. `balance` is null when no period has a total. */
+/** A row in the cases list. `balance` is null when no period has a total.
+ *  `currentStageTitle` is the first open stage of the case's active period
+ *  (null when all stages are closed or the case has no path). */
 export type CaseListItem = {
   id: string;
   number: string;
@@ -62,6 +62,7 @@ export type CaseListItem = {
   ownerName: string;
   status: CaseStatus;
   balance: number | null;
+  currentStageTitle: string | null;
   /** Jalali "YYYY/MM/DD" (ASCII digits — the page applies Persian digits). */
   lastActivity: string;
 };
@@ -78,13 +79,12 @@ export type CaseStatusFilter =
 export type CaseListParams = {
   q?: string;
   status?: CaseStatusFilter;
+  serviceId?: string;
+  ownerId?: string;
   /** Only cases with a positive outstanding balance (a computed filter). */
   hasBalance?: boolean;
   /** Only active cases with no activity past the stale threshold. */
   stale?: boolean;
-  /** Manager-only optional narrowing to one owner; ignored for employees
-   *  (their view is already forced to their own by scopeByOwnership). */
-  ownerId?: string;
   page?: number;
 };
 
@@ -95,3 +95,17 @@ export type CaseListResult = {
   pageCount: number;
   pageSize: number;
 };
+
+/** The four headline numbers above the case list (C-2 style). */
+export type CaseStats = {
+  total: number;
+  active: number;
+  waitingAction: number; // active cases with at least one open stage
+  completedThisMonth: number; // cases completed in the current Jalali month
+};
+
+/** A service pick-list entry for the list's service filter. */
+export type ServiceFilterOption = { id: string; name: string };
+
+/** An employee pick-list entry for the list's owner filter. */
+export type OwnerFilterOption = { id: string; fullName: string };

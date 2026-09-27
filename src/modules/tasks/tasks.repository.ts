@@ -2,24 +2,30 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 // ALL Prisma access for the tasks domain lives here (rule 9): the Task table and
-// its own followUps aggregate (reading a task's OWN follow-up count is not a
-// cross-module read — it is the Task relation). The record-result transaction is
-// owned by the cases module (Case.lastActivityAt + ActivityHistory); this module
-// contributes the task writes as tx-aware closures.
+// its own followUps aggregate. The record-result transaction is owned by the
+// cases module; this module contributes the task writes as tx-aware closures.
 
-// Joined shape for a task row: owner name, optional case number, follow-up count.
+// Joined shape for a task row: owner name, optional case + its service + its
+// customer, follow-up count.
 const TASK_SELECT = {
   id: true,
   title: true,
   caseId: true,
   ownerId: true,
   dueDate: true,
+  dueTime: true,
   priority: true,
   status: true,
   note: true,
   archivedAt: true,
   createdById: true,
-  case: { select: { number: true } },
+  case: {
+    select: {
+      number: true,
+      service: { select: { name: true } },
+      customer: { select: { fullName: true, companyName: true } },
+    },
+  },
   owner: { select: { fullName: true } },
   createdBy: { select: { fullName: true } },
   _count: { select: { followUps: true } },
@@ -27,7 +33,7 @@ const TASK_SELECT = {
 
 export type TaskRecord = Prisma.TaskGetPayload<{ select: typeof TASK_SELECT }>;
 
-/** List tasks matching a where clause, newest due-date first then priority. */
+/** List tasks matching a where clause, soonest due-date first. */
 export function findTasks(where: Prisma.TaskWhereInput): Promise<TaskRecord[]> {
   return prisma.task.findMany({
     where,
@@ -73,7 +79,53 @@ export async function findTaskForAction(taskId: string): Promise<
   };
 }
 
-// APPEND_MARKER
+// --- Task list stats (C-11 style) -------------------------------------------
+
+/** Open tasks due in [from, to). */
+export function countOpenDueBetween(
+  from: Date,
+  to: Date,
+  ownerId?: string,
+): Promise<number> {
+  return prisma.task.count({
+    where: {
+      status: "OPEN",
+      archivedAt: null,
+      dueDate: { gte: from, lt: to },
+      ...(ownerId ? { ownerId } : {}),
+    },
+  });
+}
+
+/** Open tasks due before `before` (overdue). */
+export function countOpenDueBefore(
+  before: Date,
+  ownerId?: string,
+): Promise<number> {
+  return prisma.task.count({
+    where: {
+      status: "OPEN",
+      archivedAt: null,
+      dueDate: { lt: before },
+      ...(ownerId ? { ownerId } : {}),
+    },
+  });
+}
+
+/** Tasks with status COMPLETED whose closedAt falls in [from, to). */
+export function countCompletedBetween(
+  from: Date,
+  to: Date,
+  ownerId?: string,
+): Promise<number> {
+  return prisma.task.count({
+    where: {
+      status: "COMPLETED",
+      closedAt: { gte: from, lt: to },
+      ...(ownerId ? { ownerId } : {}),
+    },
+  });
+}
 
 // --- Engine seams (C-14 / Phase 15) -----------------------------------------
 
@@ -92,9 +144,7 @@ export async function archiveClosedTasksBefore(cutoff: Date): Promise<number> {
   return res.count;
 }
 
-/** OPEN, non-archived tasks due before `before` (local start-of-today), with the
- *  owner's id + name, for the overdue-task manager alert. The service tallies per
- *  owner; the ≥threshold test lives in the engine. */
+/** OPEN, non-archived tasks due before `before`, with the owner's id + name. */
 export async function findOverdueOpenTasks(
   before: Date,
 ): Promise<{ ownerId: string; ownerName: string }[]> {
@@ -105,11 +155,7 @@ export async function findOverdueOpenTasks(
   return rows.map((r) => ({ ownerId: r.ownerId, ownerName: r.owner.fullName }));
 }
 
-/** Cancel every OPEN task of a case and notify each distinct owner (C-8). Part of
- *  the case-cancellation transaction (rule 4), so it is tx-aware and takes the
- *  ready-built Persian `message` (the cases service owns the text — this layer
- *  never composes Persian). Owners are de-duplicated so a person owning several
- *  of the case's tasks is notified once. No-op when nothing is open. */
+/** Cancel every OPEN task of a case and notify each distinct owner (C-8). */
 export async function cancelOpenTasksForCaseTx(
   tx: Prisma.TransactionClient,
   args: { caseId: string; message: string },
@@ -140,13 +186,13 @@ export type TaskWriteData = {
   caseId: string | null;
   ownerId: string;
   dueDate: Date;
+  dueTime: string | null;
   priority: string;
   note: string | null;
   createdById: string;
 };
 
-/** Create a task. Used directly (plain create) and inside the record-result
- *  transaction (the optional "next task"), hence a tx-aware variant. */
+/** Create a task. Used directly and inside the record-result transaction. */
 export function createTaskTx(
   tx: Prisma.TransactionClient,
   data: TaskWriteData,
@@ -157,6 +203,7 @@ export function createTaskTx(
       caseId: data.caseId,
       ownerId: data.ownerId,
       dueDate: data.dueDate,
+      dueTime: data.dueTime,
       priority: data.priority,
       status: "OPEN",
       note: data.note,
@@ -182,14 +229,14 @@ export function updateTask(
       caseId: data.caseId,
       ownerId: data.ownerId,
       dueDate: data.dueDate,
+      dueTime: data.dueTime,
       priority: data.priority,
       note: data.note,
     },
   });
 }
 
-/** Close a task as COMPLETED and stamp its close time (the archive threshold
- *  counts from here). Tx-aware — part of the record-result transaction. */
+/** Close a task as COMPLETED and stamp its close time. Tx-aware. */
 export function closeTaskTx(
   tx: Prisma.TransactionClient,
   taskId: string,
@@ -213,4 +260,3 @@ export function setArchived(taskId: string, archived: boolean): Promise<unknown>
 export function deleteTask(taskId: string): Promise<unknown> {
   return prisma.task.delete({ where: { id: taskId } });
 }
-

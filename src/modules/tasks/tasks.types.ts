@@ -33,9 +33,12 @@ export type TaskRow = {
   title: string;
   caseId: string | null;
   caseNumber: string | null;
+  serviceName: string | null;
+  customerName: string | null;
   ownerId: string;
   ownerName: string;
   dueDate: string; // Jalali YYYY/MM/DD
+  dueTime: string | null; // "HH:MM" or null
   priority: TaskPriorityKey;
   status: TaskStatusKey;
   note: string | null;
@@ -46,15 +49,40 @@ export type TaskRow = {
   createdByName: string;
 };
 
+/** The four headline numbers above the tasks list (C-11 style). */
+export type TaskStats = {
+  thisWeek: number;
+  today: number;
+  overdue: number;
+  completedThisWeek: number;
+};
+
+/** The filter params the tasks list accepts (all optional; "" = no filter). */
+export type TaskListParams = {
+  q?: string;
+  ownerId?: string;
+  serviceId?: string;
+  priority?: TaskPriorityKey | "";
+};
+
+/** A service pick-list entry for the list's service filter. */
+export type TaskServiceOption = { id: string; name: string };
+
 /** An active employee, for the owner picker. */
 export type TaskOwnerOption = { id: string; fullName: string };
 
 /** An active case, for the related-case picker. */
 export type TaskCaseOption = { id: string; number: string; label: string };
 
-/** Everything the task form needs to render its two pickers. */
+/** An active customer, for the customer picker. */
+export type TaskCustomerOption = { id: string; displayName: string };
+
+/** Everything the task form needs to render its pickers. */
 export type TaskFormData = {
   owners: TaskOwnerOption[];
   cases: TaskCaseOption[];
+  customers: TaskCustomerOption[];
+  /** customerId → that customer's active cases. */
+  casesByCustomer: Record<string, TaskCaseOption[]>;
   currentUserId: string;
 };

@@ -150,7 +150,12 @@ export type CaseListRow = {
   customer: { type: string; fullName: string | null; companyName: string | null };
   service: { name: string };
   owner: { fullName: string };
-  periods: { status: string; totalAmount: bigint | null; payments: { amount: bigint }[] }[];
+  periods: {
+    status: string;
+    totalAmount: bigint | null;
+    payments: { amount: bigint }[];
+    stages: { order: number; status: string; title: string }[];
+  }[];
 };
 
 /** List cases matching `where`, newest activity first, optionally paginated. */
@@ -176,6 +181,10 @@ export async function queryCaseRows(
           status: true,
           totalAmount: true,
           payments: { select: { amount: true } },
+          stages: {
+            orderBy: { order: "asc" },
+            select: { order: true, status: true, title: true },
+          },
         },
       },
     },
@@ -199,6 +208,41 @@ export async function countStaleCases(cutoff: Date, ownerId?: string): Promise<n
     where: {
       status: { in: LIST_ACTIVE_STATUSES },
       lastActivityAt: { lt: cutoff },
+      ...(ownerId ? { ownerId } : {}),
+    },
+  });
+}
+
+// --- Case list stats (C-2 style, /cases header) -----------------------------
+
+/** Active cases that still have at least one OPEN stage in their ACTIVE period. */
+export async function countActiveWithOpenStage(
+  ownerId?: string,
+): Promise<number> {
+  return prisma.case.count({
+    where: {
+      status: { in: LIST_ACTIVE_STATUSES },
+      ...(ownerId ? { ownerId } : {}),
+      periods: {
+        some: {
+          status: "ACTIVE",
+          stages: { some: { status: { in: ["PENDING", "IN_PROGRESS", "REJECTED"] } } },
+        },
+      },
+    },
+  });
+}
+
+/** Cases with status COMPLETED whose updatedAt falls in [from, to). */
+export async function countCompletedBetween(
+  from: Date,
+  to: Date,
+  ownerId?: string,
+): Promise<number> {
+  return prisma.case.count({
+    where: {
+      status: "COMPLETED",
+      updatedAt: { gte: from, lt: to },
       ...(ownerId ? { ownerId } : {}),
     },
   });

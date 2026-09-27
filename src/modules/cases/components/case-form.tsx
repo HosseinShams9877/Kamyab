@@ -10,6 +10,9 @@ import { caseCreateSchema } from "@/modules/cases/cases.schema";
 import type { CaseFormData, ServiceCaseMeta } from "@/modules/cases/cases.types";
 import { stageCountHint } from "@/modules/cases/lib/labels";
 import { parseJalali, addMonths, formatJalali } from "@/lib/jalali";
+import { toEnglishDigits } from "@/lib/digits";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
 
 // Register a new case (C-4). The form is live: picking a customer that lacks a
 // birth/founding date reveals those fields; picking a service loads its stage
@@ -17,6 +20,9 @@ import { parseJalali, addMonths, formatJalali } from "@/lib/jalali";
 // duration + a computed expiry preview. The SAME Zod schema validates here and
 // on the server, so the API stays the real gate. Expiry math uses the shared
 // Jalali helper (calendar months, day clamped) — the server recomputes it on save.
+//
+// The four pick fields (customer, service, owner, duration) use the shared
+// SearchableSelect; the three date fields use the shared JalaliDatePicker.
 
 type FormValues = {
   customerId: string;
@@ -43,8 +49,6 @@ function previewExpiry(start: string, monthCount: number): string | null {
   if (!j) return null;
   return formatJalali(addMonths(j, monthCount), { persianDigits: true });
 }
-
-// PLACEHOLDER_BODY
 
 export function CaseForm({ data }: { data: CaseFormData }) {
   const router = useRouter();
@@ -77,8 +81,11 @@ export function CaseForm({ data }: { data: CaseFormData }) {
 
   const customerId = watch("customerId");
   const serviceId = watch("serviceId");
+  const ownerId = watch("ownerId");
   const durationId = watch("durationId");
   const startDate = watch("startDate");
+  const birthDate = watch("birthDate");
+  const foundingDate = watch("foundingDate");
 
   const selectedCustomer = data.customers.find((c) => c.id === customerId) ?? null;
   // Birth/founding fields appear only when the picked customer still lacks them.
@@ -90,7 +97,6 @@ export function CaseForm({ data }: { data: CaseFormData }) {
   useEffect(() => {
     if (selectedCustomer) setValue("sendGreeting", selectedCustomer.sendGreeting);
   }, [selectedCustomer, setValue]);
-  // PLACEHOLDER_EFFECTS
 
   // Load the picked service's meta (renewable, stage count, active durations).
   // Resetting duration on every service change avoids carrying a stale pick.
@@ -158,7 +164,7 @@ export function CaseForm({ data }: { data: CaseFormData }) {
       setFormError("ارتباط با سرور برقرار نشد. دوباره تلاش کنید.");
     }
   }
-  // PLACEHOLDER_JSX
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
       {formError && (
@@ -168,13 +174,14 @@ export function CaseForm({ data }: { data: CaseFormData }) {
       )}
 
       <div>
-        <label htmlFor="customerId" className={labelClass}>مشتری</label>
-        <select id="customerId" className={inputClass} {...register("customerId")}>
-          <option value="">— انتخاب مشتری —</option>
-          {data.customers.map((c) => (
-            <option key={c.id} value={c.id}>{c.displayName}</option>
-          ))}
-        </select>
+        <label className={labelClass}>مشتری</label>
+        <SearchableSelect
+          value={customerId}
+          onChange={(v) => setValue("customerId", v, { shouldValidate: true })}
+          options={data.customers.map((c) => ({ value: c.id, label: c.displayName }))}
+          placeholder="— انتخاب مشتری —"
+          normalizeQuery={toEnglishDigits}
+        />
         {errors.customerId && <p className={errorClass}>{errors.customerId.message}</p>}
       </div>
 
@@ -187,18 +194,24 @@ export function CaseForm({ data }: { data: CaseFormData }) {
               : "برای این مشتری تاریخ تأسیس ثبت نشده است؛ در صورت تمایل وارد کنید."}
           </p>
           <div>
-            <label htmlFor="birthInfo" className={labelClass}>
+            <label className={labelClass}>
               {isNatural ? "تاریخ تولد" : "تاریخ تأسیس"}
             </label>
-            <input
-              id="birthInfo"
-              type="text"
-              inputMode="numeric"
-              dir="ltr"
-              placeholder={isNatural ? "۱۳۷۰/۰۱/۰۱" : "۱۳۹۰/۰۱/۰۱"}
-              className={`${inputClass} text-left`}
-              {...register(isNatural ? "birthDate" : "foundingDate")}
-            />
+            {isNatural ? (
+              <JalaliDatePicker
+                value={birthDate}
+                onChange={(v) => setValue("birthDate", v, { shouldValidate: true })}
+                maxToday
+                placeholder="۱۳۷۰/۰۱/۰۱"
+              />
+            ) : (
+              <JalaliDatePicker
+                value={foundingDate}
+                onChange={(v) => setValue("foundingDate", v, { shouldValidate: true })}
+                maxToday
+                placeholder="۱۳۹۰/۰۱/۰۱"
+              />
+            )}
             {isNatural && errors.birthDate && (
               <p className={errorClass}>{errors.birthDate.message}</p>
             )}
@@ -212,41 +225,38 @@ export function CaseForm({ data }: { data: CaseFormData }) {
           </label>
         </div>
       )}
-      {/* PLACEHOLDER_JSX_B */}
+
       <div>
-        <label htmlFor="serviceId" className={labelClass}>خدمت</label>
-        <select id="serviceId" className={inputClass} {...register("serviceId")}>
-          <option value="">— انتخاب خدمت —</option>
-          {data.services.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+        <label className={labelClass}>خدمت</label>
+        <SearchableSelect
+          value={serviceId}
+          onChange={(v) => setValue("serviceId", v, { shouldValidate: true })}
+          options={data.services.map((s) => ({ value: s.id, label: s.name }))}
+          placeholder="— انتخاب خدمت —"
+        />
         {errors.serviceId && <p className={errorClass}>{errors.serviceId.message}</p>}
         {metaLoading && <p className={hintClass}>در حال بارگذاری…</p>}
         {meta && !metaLoading && <p className={hintClass}>{stageCountHint(meta.stageCount)}</p>}
       </div>
 
       <div>
-        <label htmlFor="ownerId" className={labelClass}>مسئول پرونده</label>
-        <select id="ownerId" className={inputClass} {...register("ownerId")}>
-          <option value="">— انتخاب مسئول —</option>
-          {data.owners.map((o) => (
-            <option key={o.id} value={o.id}>{o.fullName}</option>
-          ))}
-        </select>
+        <label className={labelClass}>مسئول پرونده</label>
+        <SearchableSelect
+          value={ownerId}
+          onChange={(v) => setValue("ownerId", v, { shouldValidate: true })}
+          options={data.owners.map((o) => ({ value: o.id, label: o.fullName }))}
+          placeholder="— انتخاب مسئول —"
+        />
         {errors.ownerId && <p className={errorClass}>{errors.ownerId.message}</p>}
       </div>
 
       <div>
-        <label htmlFor="startDate" className={labelClass}>تاریخ شروع</label>
-        <input
-          id="startDate"
-          type="text"
-          inputMode="numeric"
-          dir="ltr"
+        <label className={labelClass}>تاریخ شروع</label>
+        <JalaliDatePicker
+          value={startDate}
+          onChange={(v) => setValue("startDate", v, { shouldValidate: true })}
+          maxToday
           placeholder="۱۴۰۴/۰۱/۰۱"
-          className={`${inputClass} text-left`}
-          {...register("startDate")}
         />
         {errors.startDate && <p className={errorClass}>{errors.startDate.message}</p>}
       </div>
@@ -255,13 +265,13 @@ export function CaseForm({ data }: { data: CaseFormData }) {
       {meta?.renewable && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="durationId" className={labelClass}>مدت اعتبار</label>
-            <select id="durationId" className={inputClass} {...register("durationId")}>
-              <option value="">— انتخاب مدت —</option>
-              {meta.durations.map((d) => (
-                <option key={d.id} value={d.id}>{d.title}</option>
-              ))}
-            </select>
+            <label className={labelClass}>مدت اعتبار</label>
+            <SearchableSelect
+              value={durationId}
+              onChange={(v) => setValue("durationId", v, { shouldValidate: true })}
+              options={meta.durations.map((d) => ({ value: d.id, label: d.title }))}
+              placeholder="— انتخاب مدت —"
+            />
             {meta.durations.length === 0 && (
               <p className={errorClass}>برای این خدمت مدت اعتباری تعریف نشده است.</p>
             )}
@@ -311,7 +321,3 @@ export function CaseForm({ data }: { data: CaseFormData }) {
     </form>
   );
 }
-
-
-
-

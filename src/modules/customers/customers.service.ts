@@ -22,6 +22,9 @@ import type {
   CustomerCaseSummary,
   CustomerOption,
   FollowUpEntry,
+  CustomerStats,
+  ServiceFilterOption,
+  EmployeeFilterOption,
 } from "./customers.types";
 import {
   buildDeleteBlockedMessage,
@@ -36,7 +39,7 @@ import type { CustomerWriteData, CaseWithDetail } from "./customers.repository";
 // Jalali<->Date conversion, display-name formatting, and the delete/deactivate
 // rules live here — the repository stays a thin DB layer.
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 const CREATE_RETRIES = 5;
 const CASE_STATUS_DONE = ["DONE", "NOT_NEEDED"];
 
@@ -133,6 +136,27 @@ export async function listCityOptions(): Promise<string[]> {
   return repo.listCities();
 }
 
+/** The four headline numbers on top of the customer list (C-3). */
+export async function getCustomerStats(): Promise<CustomerStats> {
+  const [total, active, inactive, nearRenewal] = await Promise.all([
+    repo.countCustomers(),
+    repo.countCustomersByStatus(true),
+    repo.countCustomersByStatus(false),
+    repo.countCustomersNearRenewal(30),
+  ]);
+  return { total, active, nearRenewal, inactive };
+}
+
+/** Active services for the list's service filter dropdown. */
+export async function listServiceOptions(): Promise<ServiceFilterOption[]> {
+  return repo.listActiveServiceOptions();
+}
+
+/** Active employees for the list's employee filter dropdown. */
+export async function listEmployeeOptions(): Promise<EmployeeFilterOption[]> {
+  return repo.listActiveEmployeeOptions();
+}
+
 /** Paginated, filtered customer list (C-3). 25 rows per page, server-side. */
 export async function listCustomers(
   params: CustomerListParams,
@@ -149,29 +173,46 @@ export async function listCustomers(
     type,
     status,
     city: params.city && params.city.trim() ? params.city.trim() : null,
+    serviceId:
+      params.serviceId && params.serviceId.trim() ? params.serviceId.trim() : null,
     sort,
     ...(params.ownerId ? { ownerId: params.ownerId } : {}),
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
 
-  const activeByCustomer = await repo.countActiveCasesByCustomer(rows.map((r) => r.id));
+  const ids = rows.map((r) => r.id);
+  const [activeByCustomer, servicesByCustomer, ownersByCustomer, followUpsByCustomer] =
+    await Promise.all([
+      repo.countActiveCasesByCustomer(ids),
+      repo.findActiveServiceNamesByCustomer(ids),
+      repo.findLatestOwnerByCustomer(ids),
+      repo.findLatestFollowUpByCustomer(ids),
+    ]);
 
-  const items: CustomerListItem[] = rows.map((r) => ({
-    id: r.id,
-    code: r.code,
-    displayName: customerDisplayName({
-      type: r.type as CustomerType,
-      fullName: r.fullName,
-      companyName: r.companyName,
+  const items: CustomerListItem[] = rows.map((r) => {
+    const lastFollowUp = followUpsByCustomer[r.id];
+    return {
+      id: r.id,
       code: r.code,
-    }),
-    type: r.type as CustomerType,
-    mobile: r.mobile,
-    city: r.city,
-    activeCases: activeByCustomer[r.id] ?? 0,
-    status: r.status,
-  }));
+      displayName: customerDisplayName({
+        type: r.type as CustomerType,
+        fullName: r.fullName,
+        companyName: r.companyName,
+        code: r.code,
+      }),
+      type: r.type as CustomerType,
+      mobile: r.mobile,
+      city: r.city,
+      activeCases: activeByCustomer[r.id] ?? 0,
+      status: r.status,
+      activeServiceNames: servicesByCustomer[r.id] ?? [],
+      ownerName: ownersByCustomer[r.id] ?? null,
+      lastFollowUpAt: lastFollowUp
+        ? formatJalali(toJalali(lastFollowUp), { persianDigits: false })
+        : null,
+    };
+  });
 
   return {
     items,

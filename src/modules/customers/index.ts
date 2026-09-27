@@ -9,7 +9,10 @@ export {
   listCustomers,
   getCustomer,
   getCustomerPageData,
+  getCustomerStats,
   listCityOptions,
+  listServiceOptions,
+  listEmployeeOptions,
   listActiveCustomerOptions,
   saveCaseBirthInfoTx,
   createCustomer,
@@ -41,6 +44,9 @@ export type {
   CustomerSort,
   CustomerListParams,
   CustomerListResult,
+  CustomerStats,
+  ServiceFilterOption,
+  EmployeeFilterOption,
 } from "./customers.types";
 
 export {
@@ -55,6 +61,8 @@ export {
 // types leaves directly (never this barrel, which pulls in Prisma).
 export { CustomerForm } from "./components/customer-form";
 export { CustomerActions } from "./components/customer-actions";
+export { CustomersTable } from "./components/customers-table";
+
 
 export {
   CUSTOMER_TYPE_LABELS,

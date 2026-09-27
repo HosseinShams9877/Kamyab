@@ -20,13 +20,13 @@ export default async function NewCasePage({
   const data = await getCaseFormData(customerId ?? null);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto w-full px-4 py-10">
       <div className="mb-6">
         <Link href={home} className="text-sm text-primary hover:underline">
           ← بازگشت به داشبورد
         </Link>
       </div>
-      <h1 className="mb-6 text-2xl font-bold text-text">ثبت پروندهٔ جدید</h1>
+      <h1 className="mb-6 text-2xl font-bold text-text">ثبت پرونده جدید</h1>
       <section className="rounded-card border border-border bg-card p-6 shadow-card">
         <CaseForm data={data} />
       </section>
