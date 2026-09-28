@@ -153,17 +153,19 @@ export async function recordResult(
       if (effect && activePeriod) {
         await setPeriodFollowUpTx(tx, activePeriod.id, effect);
       }
-      if (nextTask) {
-        await createTaskTx(tx, {
-          title: nextTask.title,
-          caseId,
-          ownerId: task.ownerId,
-          dueDate: nextTask.dueDate,
-          priority: "NORMAL",
-          note: null,
-          createdById: user.id,
-        });
-      }
+     if (nextTask) {
+  await createTaskTx(tx, {
+    title: nextTask.title,
+    caseId,
+    customerId: null,
+    ownerId: task.ownerId,
+    dueDate: nextTask.dueDate,
+    dueTime: null,
+    priority: "NORMAL",
+    note: null,
+    createdById: user.id,
+  });
+}
     },
     historyAction: "followup.recorded",
     historyDetail: JSON.stringify({
