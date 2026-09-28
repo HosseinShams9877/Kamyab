@@ -60,10 +60,10 @@ export function AppShell({
       {/* Sidebar — off-canvas drawer on mobile (anchored to the right and
           sliding off to the right), static column from lg up. */}
       <aside
-        className={`fixed inset-y-0 right-0 z-40 flex w-64 max-w-[80vw] flex-col border-e border-border bg-card transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:translate-x-0 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
+  className={`fixed inset-y-0 right-0 z-40 flex w-64 max-w-[80vw] flex-col border-e border-border bg-card transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-64 lg:shrink-0 lg:translate-x-0 ${
+    open ? "translate-x-0" : "translate-x-full"
+  }`}
+>
         <div className="flex h-16 shrink-0 items-center border-b border-border px-5">
           <span className="text-lg font-bold text-primary">سامانه کامیاب</span>
         </div>
@@ -78,10 +78,10 @@ export function AppShell({
                     onClick={() => setOpen(false)}
                     aria-current={active ? "page" : undefined}
                     className={`flex min-h-[44px] items-center rounded-control px-3 text-sm font-medium transition-colors ${
-                      active
-                        ? "bg-primary text-white"
-                        : "text-text hover:bg-page"
-                    }`}
+  active
+    ? "bg-primary/10 text-primary"
+    : "text-text hover:bg-primary/10 hover:text-primary"
+}`}
                   >
                     {item.label}
                   </Link>
