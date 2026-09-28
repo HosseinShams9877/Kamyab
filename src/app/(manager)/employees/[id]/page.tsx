@@ -42,7 +42,7 @@ export default async function EmployeeDetailPage({
   const isSelf = user.id === employee.id;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
+    <main className="mx-auto w-full px-4 py-10">
       <div className="mb-6">
         <Link href="/employees" className="text-sm text-primary hover:underline">
           ← بازگشت به فهرست کارکنان

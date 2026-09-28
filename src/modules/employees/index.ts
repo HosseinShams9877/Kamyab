@@ -11,6 +11,7 @@ export {
   listSuccessorCandidates,
   listCaseOwnerOptions,
   listActiveManagerIds,
+  getEmployeeStats,
   createEmployee,
   updateEmployee,
   reactivateEmployee,
@@ -47,6 +48,7 @@ export type {
   WorkloadRow,
   PermissionsView,
   DeactivationResult,
+  EmployeeStats,
 } from "./employees.types";
 
 // Module UI + presentation. Server code (app/ pages) imports these through the
@@ -57,5 +59,6 @@ export { SetPasswordForm } from "./components/set-password-form";
 export { PermissionMatrix } from "./components/permission-matrix";
 export { DeactivatePanel } from "./components/deactivate-panel";
 export { ReactivateButton } from "./components/reactivate-button";
+export { EmployeeRowActions } from "./components/employee-row-actions";
 
 export { ROLE_LABELS } from "./lib/permission-labels";

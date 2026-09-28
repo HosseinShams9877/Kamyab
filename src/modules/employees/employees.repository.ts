@@ -9,10 +9,7 @@ import type {
   WorkloadRow,
 } from "./employees.types";
 
-// ALL Prisma access for the employees domain lives here (modular rule: the
-// repository is the only file that touches the database for this module, and it
-// is called only by employees.service). Persian text never appears in this
-// layer — it deals in ids, counts, and rows.
+// ALL Prisma access for the employees domain lives here.
 
 export async function listEmployees(): Promise<EmployeeListItem[]> {
   const rows = await prisma.employee.findMany({
@@ -21,18 +18,26 @@ export async function listEmployees(): Promise<EmployeeListItem[]> {
       id: true,
       fullName: true,
       mobile: true,
+      email: true,
       role: true,
       status: true,
+      createdAt: true,
       department: { select: { title: true } },
+      _count: {
+        select: { ownedCases: { where: { status: { in: ["NEW", "IN_PROGRESS"] } } } },
+      },
     },
   });
   return rows.map((r) => ({
     id: r.id,
     fullName: r.fullName,
     mobile: r.mobile,
+    email: r.email,
     role: r.role as Role,
     status: r.status,
     departmentTitle: r.department?.title ?? null,
+    activeCases: r._count.ownedCases,
+    createdAt: r.createdAt.toISOString(),
   }));
 }
 
@@ -53,12 +58,10 @@ export async function findEmployeeById(id: string): Promise<EmployeeDetail | nul
   return { ...r, role: r.role as Role };
 }
 
-/** Minimal lookup for the mobile-uniqueness check (mobile is the username). */
 export function findEmployeeIdByMobile(mobile: string): Promise<{ id: string } | null> {
   return prisma.employee.findUnique({ where: { mobile }, select: { id: true } });
 }
 
-/** Status of a would-be successor, for server-side successor validation. */
 export function findEmployeeStatus(
   id: string,
 ): Promise<{ id: string; status: boolean } | null> {
@@ -91,7 +94,6 @@ export async function updateEmployee(id: string, data: UpdateEmployeeData): Prom
   await prisma.employee.update({ where: { id }, data });
 }
 
-/** Reactivate a previously deactivated employee (status back to true). */
 export async function reactivateEmployee(id: string): Promise<void> {
   await prisma.employee.update({ where: { id }, data: { status: true } });
 }
@@ -100,14 +102,12 @@ export async function updatePasswordHash(id: string, passwordHash: string): Prom
   await prisma.employee.update({ where: { id }, data: { passwordHash } });
 }
 
-/** Count OTHER active managers (excludes the given id) — last-manager guard. */
 export function countOtherActiveManagers(excludeId: string): Promise<number> {
   return prisma.employee.count({
     where: { role: "MANAGER", status: true, id: { not: excludeId } },
   });
 }
 
-/** Ids of every active manager, for engine alerts addressed to "all managers". */
 export async function findActiveManagerIds(): Promise<string[]> {
   const rows = await prisma.employee.findMany({
     where: { role: "MANAGER", status: true },
@@ -116,10 +116,6 @@ export async function findActiveManagerIds(): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-/**
- * Active workload for an employee: active cases (NEW or IN_PROGRESS) they own and
- * open tasks (OPEN) they own. Both drive the deactivation-transfer decision.
- */
 export async function countWorkload(ownerId: string): Promise<Workload> {
   const [activeCases, openTasks] = await Promise.all([
     prisma.case.count({ where: { ownerId, status: { in: ["NEW", "IN_PROGRESS"] } } }),
@@ -128,7 +124,6 @@ export async function countWorkload(ownerId: string): Promise<Workload> {
   return { activeCases, openTasks };
 }
 
-/** Active employees other than `excludeId`, for the successor / owner select. */
 export async function listActiveEmployees(excludeId?: string): Promise<EmployeeOption[]> {
   return prisma.employee.findMany({
     where: { status: true, ...(excludeId ? { id: { not: excludeId } } : {}) },
@@ -139,12 +134,6 @@ export async function listActiveEmployees(excludeId?: string): Promise<EmployeeO
 
 const ACTIVE_CASE_STATUSES = ["NEW", "IN_PROGRESS"];
 
-/**
- * Bulk workload across every active employee for the dashboard table (C-2): active
- * cases owned, OPEN tasks due today, and overdue OPEN tasks. Three groupBy counts
- * (one query each, not one-per-employee) joined onto the active-employee list.
- * `todayStart`/`tomorrowStart` are the local-day bounds the service computes.
- */
 export async function listWorkloads(
   todayStart: Date,
   tomorrowStart: Date,
@@ -193,12 +182,6 @@ export async function listWorkloads(
   }));
 }
 
-/**
- * Active departments for the employee form's Department dropdown. This is a
- * reference read of a seeded lookup table; there is no departments module yet,
- * so no repository boundary is crossed. When a departments/settings-lists module
- * is built, this read moves behind its service (docs/roadmap/folder-structure.md).
- */
 export function listActiveDepartments(): Promise<DepartmentOption[]> {
   return prisma.department.findMany({
     where: { active: true },
@@ -207,7 +190,6 @@ export function listActiveDepartments(): Promise<DepartmentOption[]> {
   });
 }
 
-/** True when the given department id exists and is active (create/update guard). */
 export async function departmentExists(id: string): Promise<boolean> {
   const row = await prisma.department.findFirst({
     where: { id, active: true },
@@ -216,21 +198,10 @@ export async function departmentExists(id: string): Promise<boolean> {
   return row !== null;
 }
 
-/**
- * Deactivate an employee that has no active work — a single status update, no
- * transfer needed.
- */
 export async function deactivateEmployee(id: string): Promise<void> {
   await prisma.employee.update({ where: { id }, data: { status: false } });
 }
 
-/**
- * Transfer all active work from `targetId` to `successorId`, notify the
- * successor, and deactivate the target — ALL in one transaction (rule 4). The
- * Persian notification text is produced by the injected `buildMessage` so this
- * data-layer function stays free of presentation concerns. Returns the counts
- * actually moved.
- */
 export async function transferWorkAndDeactivate(
   targetId: string,
   successorId: string,
@@ -252,4 +223,28 @@ export async function transferWorkAndDeactivate(
     await tx.employee.update({ where: { id: targetId }, data: { status: false } });
     return moved;
   });
+}
+
+// --- Employee list stats (C-12 header) --------------------------------------
+
+export function countActiveEmployees(): Promise<number> {
+  return prisma.employee.count({ where: { status: true } });
+}
+
+export function countInactiveEmployees(): Promise<number> {
+  return prisma.employee.count({ where: { status: false } });
+}
+
+/** Distinct role values in use across all employees. */
+export async function countDistinctRoles(): Promise<number> {
+  const rows = await prisma.employee.findMany({
+    distinct: ["role"],
+    select: { role: true },
+  });
+  return rows.length;
+}
+
+/** Total stored permission exceptions (overrides from the role default). */
+export function countPermissionExceptions(): Promise<number> {
+  return prisma.permissionException.count();
 }

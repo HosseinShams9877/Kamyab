@@ -25,7 +25,7 @@ type FormValues = {
   mobile: string;
   email: string;
   departmentId: string;
-  role: "MANAGER" | "SUPERVISOR" | "EMPLOYEE";
+  role: "MANAGER" | "SUPERVISOR" | "EMPLOYEE" | "";
   password: string;
 };
 
@@ -55,7 +55,7 @@ export function EmployeeForm(props: Props) {
       mobile: initial?.mobile ?? "",
       email: initial?.email ?? "",
       departmentId: initial?.departmentId ?? "",
-      role: initial?.role ?? "EMPLOYEE",
+      role: initial?.role ?? "",
       password: "",
     },
   });
@@ -114,7 +114,7 @@ export function EmployeeForm(props: Props) {
         </div>
       )}
       {done && (
-        <div className="rounded-control bg-card px-4 py-3 text-sm text-primary">
+        <div className="rounded-control bg-page px-4 py-3 text-sm text-primary">
           {mode === "create" ? "کارمند ایجاد شد." : "تغییرات ذخیره شد."}
         </div>
       )}
@@ -159,6 +159,7 @@ export function EmployeeForm(props: Props) {
       <div>
         <label htmlFor="role" className={labelClass}>نقش</label>
         <select id="role" className={inputClass} {...register("role")}>
+          <option value="">— انتخاب نقش —</option>
           <option value="MANAGER">{ROLE_LABELS.MANAGER}</option>
           <option value="SUPERVISOR">{ROLE_LABELS.SUPERVISOR}</option>
           <option value="EMPLOYEE">{ROLE_LABELS.EMPLOYEE}</option>
@@ -169,7 +170,7 @@ export function EmployeeForm(props: Props) {
       {mode === "create" && (
         <div>
           <label htmlFor="password" className={labelClass}>رمز عبور اولیه</label>
-          <input id="password" type="password" dir="ltr" className={`${inputClass} text-left`} {...register("password")} />
+          <input id="password" type="password" dir="ltr" autoComplete="new-password" className={`${inputClass} text-left`} {...register("password")} />
           {errors.password && <p className={errorClass}>{errors.password.message}</p>}
         </div>
       )}

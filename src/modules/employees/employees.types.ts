@@ -8,9 +8,12 @@ export type EmployeeListItem = {
   id: string;
   fullName: string;
   mobile: string;
+  email: string | null;
   role: Role;
   status: boolean;
   departmentTitle: string | null;
+  activeCases: number;
+  createdAt: string; // Jalali YYYY/MM/DD
 };
 
 export type EmployeeDetail = {
@@ -25,14 +28,10 @@ export type EmployeeDetail = {
 
 export type DepartmentOption = { id: string; title: string };
 
-// A lightweight active-employee row used to populate the successor / owner
-// selects on the deactivation flow.
 export type EmployeeOption = { id: string; fullName: string };
 
 export type Workload = { activeCases: number; openTasks: number };
 
-/** A row of the dashboard's employee-workload table (C-2 / the workload report).
- *  Purely a workload-control view — never a performance metric. */
 export type WorkloadRow = {
   id: string;
   fullName: string;
@@ -42,18 +41,21 @@ export type WorkloadRow = {
   overdueTasks: number;
 };
 
-// The permission matrix needs the role default AND the current effective value
-// for every key, so the UI can show "default: allowed" next to each toggle.
 export type PermissionsView = {
   role: Role;
   defaults: PermissionMap;
   effective: PermissionMap;
 };
 
-// Result of attempting a deactivation. `blocked` carries a Persian reason the
-// route surfaces to the manager; `successorRequired` additionally carries the
-// workload counts and the candidate list so the UI can ask for a successor.
 export type DeactivationResult =
   | { ok: true; transferred: Workload }
   | { ok: false; reason: "self" | "last_manager" | "already_inactive" | "successor_invalid"; message: string }
   | { ok: false; reason: "successor_required"; message: string; workload: Workload };
+
+/** The four headline stats above the employees list (C-12). */
+export type EmployeeStats = {
+  active: number;
+  inactive: number;
+  roles: number; // count of distinct roles in use
+  permissionOverrides: number; // count of stored permission exceptions
+};

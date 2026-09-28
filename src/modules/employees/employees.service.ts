@@ -16,6 +16,7 @@ import type {
   EmployeeDetail,
   EmployeeListItem,
   EmployeeOption,
+  EmployeeStats,
   PermissionsView,
   Workload,
   WorkloadRow,
@@ -68,11 +69,21 @@ export function listActiveManagerIds(): Promise<string[]> {
   return repo.findActiveManagerIds();
 }
 
+/** The four headline stats above the employees list (C-12). */
+export async function getEmployeeStats(): Promise<EmployeeStats> {
+  const [active, inactive, roles, permissionOverrides] = await Promise.all([
+    repo.countActiveEmployees(),
+    repo.countInactiveEmployees(),
+    repo.countDistinctRoles(),
+    repo.countPermissionExceptions(),
+  ]);
+  return { active, inactive, roles, permissionOverrides };
+}
+
 /**
  * Create an employee. Enforces mobile uniqueness (mobile is the username) and an
  * existing/active department when one is given, then hashes the initial password
- * before storing. Returns a Persian field error instead of throwing on the two
- * expected validation failures the schema cannot catch (uniqueness, referential).
+ * before storing.
  */
 export async function createEmployee(
   input: CreateEmployeeInput,
@@ -173,8 +184,6 @@ export function getWorkload(id: string): Promise<Workload> {
 
 /**
  * Bulk workload for the dashboard's employee table (C-2 / the workload report).
- * Computes the local-day bounds ("today" 00:00 → tomorrow 00:00) once and lets
- * the repository do the three grouped counts. `now` is injectable for testing.
  */
 export function listWorkloads(now: Date = new Date()): Promise<WorkloadRow[]> {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
