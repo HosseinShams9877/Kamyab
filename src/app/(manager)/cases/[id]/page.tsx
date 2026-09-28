@@ -149,7 +149,7 @@ export default async function CaseDetailPage({
   const amountText = (v: number | null) => (v === null ? "—" : formatToman(v));
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10">
+    <main className="mx-auto w-full px-4 py-10">
       {/* PAGE_BODY */}
       <div className="mb-6">
         <Link

@@ -66,8 +66,7 @@ export async function createRegistrationPeriodTx(
  * (→ RENEWED) and create the next one (ACTIVE, indexNumber = previous + 1) with
  * the copied renewal-path stages, the first IN_PROGRESS (with startedAt) and the
  * rest PENDING. The reminder cycle is fresh automatically — SentReminder is keyed
- * by periodId, so the new period starts with no sent rows. Case expiry is never
- * stored; it recomputes from the new active period (rule 2).
+ * by periodId, so the new period starts with no sent rows.
  */
 export async function renewPeriodTx(
   tx: Prisma.TransactionClient,
@@ -123,9 +122,7 @@ export async function setPeriodStatusTx(
   await tx.period.update({ where: { id: periodId }, data: { status } });
 }
 
-/** The case's active period, for a renewal: its index (→ next number), expiry
- *  (→ the new span's default start) and follow-up status. Null when the case has
- *  no active period. */
+/** The case's active period, for a renewal. */
 export async function findRenewablePeriod(caseId: string): Promise<{
   id: string;
   indexNumber: number;
@@ -140,8 +137,7 @@ export async function findRenewablePeriod(caseId: string): Promise<{
 }
 
 /** A period's lifecycle facts (its owning case, status, follow-up status, expiry
- *  and index), for authorizing/validating a manual abandon or restore (C-10). The
- *  expiry is returned raw; days-remaining is computed in the service (rule 2). */
+ *  and index), for authorizing/validating a manual abandon or restore (C-10). */
 export async function findPeriodLifecycle(periodId: string): Promise<{
   caseId: string;
   status: string;
@@ -161,8 +157,8 @@ export async function findPeriodLifecycle(periodId: string): Promise<{
   });
 }
 
-/** The renewals work-queue (C-10): every ACTIVE or ABANDONED period of a
- *  non-cancelled case, with the joined display names + the payment amounts the
+/** The renewals work-queue (C-10): every ACTIVE / ABANDONED / RENEWED period of
+ *  a non-cancelled case, with the joined display names + the payment amounts the
  *  balance is computed from (rule 2). The service classifies each row into a tab
  *  and computes days-remaining + the abandon-eligibility flag. */
 export type RenewalQueueRow = {
@@ -179,14 +175,19 @@ export type RenewalQueueRow = {
     ownerId: string;
     owner: { fullName: string };
     service: { name: string };
-    customer: { type: string; fullName: string | null; companyName: string | null };
+    customer: {
+      type: string;
+      fullName: string | null;
+      companyName: string | null;
+      mobile: string;
+    };
   };
 };
 
 export async function findRenewalsQueue(): Promise<RenewalQueueRow[]> {
   return prisma.period.findMany({
     where: {
-      status: { in: ["ACTIVE", "ABANDONED"] },
+      status: { in: ["ACTIVE", "ABANDONED", "RENEWED"] },
       case: { status: { not: "CANCELLED" } },
     },
     orderBy: { expiryDate: "asc" },
@@ -205,7 +206,9 @@ export async function findRenewalsQueue(): Promise<RenewalQueueRow[]> {
           ownerId: true,
           owner: { select: { fullName: true } },
           service: { select: { name: true } },
-          customer: { select: { type: true, fullName: true, companyName: true } },
+          customer: {
+            select: { type: true, fullName: true, companyName: true, mobile: true },
+          },
         },
       },
     },
@@ -213,10 +216,6 @@ export async function findRenewalsQueue(): Promise<RenewalQueueRow[]> {
 }
 
 // --- Engine seams (C-14 / Phase 15) -----------------------------------------
-// Read/write seams the automatic engine drives through periods.service (rule 9:
-// the engine never touches the Period table directly). Reading the service's
-// active reminder rules via a relation-select inside this periods-owned Period
-// query is a relation read (like findRenewalsQueue), not a cross-module call.
 
 /** An ACTIVE period of a non-cancelled case whose service has ≥1 active rule,
  *  with those rules and the customer's contact details, for renewal reminders. */
@@ -270,8 +269,7 @@ export async function findReminderCandidates(): Promise<ReminderCandidateRow[]> 
   });
 }
 
-/** Move the given periods to ABANDONED in one statement (atomic). The engine has
- *  already decided eligibility (isAbandonable); this only writes. Returns the
+/** Move the given periods to ABANDONED in one statement (atomic). Returns the
  *  number of rows actually changed. */
 export async function abandonPeriods(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
@@ -429,9 +427,7 @@ export async function findActivePeriod(
 }
 
 /** A case's current (highest-index) period regardless of status, for case
- *  restore (C-8): the period cancelled alongside the case is the current one, so
- *  restore reactivates it only when it is CANCELLED. Null when the case has no
- *  period at all. */
+ *  restore (C-8). Null when the case has no period at all. */
 export async function findCurrentPeriod(
   caseId: string,
 ): Promise<{ id: string; indexNumber: number; status: string } | null> {
@@ -461,7 +457,6 @@ export async function setPeriodFollowUpTx(
 
 // --- Stage engine writes (tx-aware, run on the cases module's transaction) --
 
-/** Open statuses: a stage still on the path. Closed = DONE | NOT_NEEDED. */
 const OPEN_STATUSES = ["PENDING", "IN_PROGRESS", "REJECTED"];
 
 /**
@@ -499,9 +494,6 @@ export async function applyStageActionTx(
           lastChangedById: by,
         },
       });
-      // Advance: the first still-open stage by order (the just-closed one is no
-      // longer open). Only a PENDING one is auto-started; a REJECTED stage that
-      // is now first stays open and rejected.
       const siblings = await tx.caseStage.findMany({
         where: { periodId: stage.periodId },
         orderBy: { order: "asc" },
@@ -574,8 +566,7 @@ export async function deleteStageTx(
 }
 
 /** Swap a stage's order with its neighbor toward the start ("up") or end
- *  ("down"). A no-op at the edge. There is no unique constraint on
- *  (periodId, order), so a direct swap is safe. */
+ *  ("down"). A no-op at the edge. */
 export async function moveStageTx(
   tx: Prisma.TransactionClient,
   args: MoveStageArgs,

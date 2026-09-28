@@ -19,10 +19,9 @@ export class PeriodRuleError extends Error {
 }
 
 // --- Bounds -----------------------------------------------------------------
-/** Renewal note / renewal-follow-up note length (C-9). */
 export const NOTE_MAX = 300;
 
-// --- Persian rule messages (the schema/service surface these) ----------------
+// --- Persian rule messages --------------------------------------------------
 export const START_DATE_INVALID = "تاریخ شروع دورهٔ جدید معتبر نیست.";
 export const DURATION_REQUIRED = "انتخاب مدت اعتبار الزامی است.";
 export const DURATION_INVALID = "مدت اعتبار انتخاب‌شده معتبر نیست.";
@@ -45,14 +44,14 @@ export const NOT_ABANDONED = "این دوره در وضعیت رهاشده نی�
 
 // --- Renewals-page tabs (C-10) ----------------------------------------------
 
-/** The renewals work-queue tabs (C-10). A period is classified live from its
- *  status, computed days-remaining and follow-up status (rule 2). */
+/** The renewals work-queue tabs (C-10). */
 export type RenewalTab =
   | "all"
   | "urgent"
   | "near"
   | "expired"
   | "no_followup"
+  | "renewed"
   | "abandoned";
 
 export const RENEWAL_TABS: RenewalTab[] = [
@@ -61,57 +60,48 @@ export const RENEWAL_TABS: RenewalTab[] = [
   "near",
   "expired",
   "no_followup",
+  "renewed",
   "abandoned",
 ];
 
 /** Windows (in days) that define the tabs (C-10). */
-export const ALL_WINDOW = 90; // "expiring within the next 90 days or already expired"
-export const URGENT_MAX = 7; // "up to 7 days left"
-export const NEAR_MIN = 8; // "between 8 and 30 days left"
+export const ALL_WINDOW = 90;
+export const URGENT_MAX = 7;
+export const NEAR_MIN = 8;
 export const NEAR_MAX = 30;
-export const NO_FOLLOWUP_WINDOW = 30; // "up to 30 days left …"
+export const NO_FOLLOWUP_WINDOW = 30;
 
 /** The fields the classification + abandonment rules read (all computed, rule 2). */
 export type RenewalFacts = {
   status: PeriodStatus;
-  daysRemaining: number | null; // null = no expiry (non-renewable); negative = expired
+  daysRemaining: number | null;
   followUpStatus: FollowUpStatus;
 };
 
-/**
- * Days elapsed since a period's expiry: positive once expired, 0/negative while
- * still valid, null with no expiry. The inverse of daysRemaining.
- */
 export function daysSinceExpiry(daysRemaining: number | null): number | null {
   return daysRemaining === null ? null : -daysRemaining;
 }
 
-/**
- * The exact C-10 abandonment condition (Phase 13 evaluates it for the manual
- * "abandon" control; Phase 15's engine will apply it automatically):
- *   ACTIVE · expired · more than `abandonmentDays` past expiry · not renewed.
- * Exception: follow-up status "Not interested" ⇒ abandonable immediately, without
- * waiting for the threshold. A period with no expiry is never abandonable.
- */
 export function isAbandonable(
   facts: RenewalFacts,
   abandonmentDays: number,
 ): boolean {
   if (facts.status !== "ACTIVE") return false;
-  if (facts.daysRemaining === null) return false; // no expiry — never abandoned
-  if (facts.daysRemaining >= 0) return false; // not yet expired
-  if (facts.followUpStatus === "NOT_INTERESTED") return true; // immediate exception
-  return -facts.daysRemaining > abandonmentDays; // past the threshold
+  if (facts.daysRemaining === null) return false;
+  if (facts.daysRemaining >= 0) return false;
+  if (facts.followUpStatus === "NOT_INTERESTED") return true;
+  return -facts.daysRemaining > abandonmentDays;
 }
 
 /**
- * Whether a period belongs in a given renewals tab (C-10). The abandoned tab is
- * the periods whose status is ABANDONED (a real transition — on abandonment a
- * period leaves the main tabs); every other tab shows only ACTIVE periods with an
- * expiry, classified by days-remaining.
+ * Whether a period belongs in a given renewals tab (C-10). `abandoned` and
+ * `renewed` are independent of days-remaining (real status transitions); every
+ * other tab shows only ACTIVE periods with an expiry, classified by
+ * days-remaining.
  */
 export function inRenewalTab(tab: RenewalTab, facts: RenewalFacts): boolean {
   if (tab === "abandoned") return facts.status === "ABANDONED";
+  if (tab === "renewed") return facts.status === "RENEWED";
 
   // Main tabs: an active, dated period only.
   if (facts.status !== "ACTIVE") return false;
@@ -120,7 +110,7 @@ export function inRenewalTab(tab: RenewalTab, facts: RenewalFacts): boolean {
 
   switch (tab) {
     case "all":
-      return d <= ALL_WINDOW; // within 90 days ahead, or already expired
+      return d <= ALL_WINDOW;
     case "urgent":
       return d >= 0 && d <= URGENT_MAX;
     case "near":
@@ -129,5 +119,7 @@ export function inRenewalTab(tab: RenewalTab, facts: RenewalFacts): boolean {
       return d < 0;
     case "no_followup":
       return d <= NO_FOLLOWUP_WINDOW && facts.followUpStatus === "NOT_FOLLOWED_UP";
+    default:
+      return false;
   }
 }

@@ -30,11 +30,12 @@ export const FOLLOW_UP_STATUS_BADGE: Record<FollowUpStatus, string> = {
 
 /** The renewals work-queue tab labels (C-10). */
 export const RENEWAL_TAB_LABELS: Record<RenewalTab, string> = {
-  all: "همه",
+  all: "همه تمدیدها",
   urgent: "فوری",
-  near: "نزدیک",
-  expired: "منقضی",
+  near: "نزدیک به تمدید",
+  expired: "منقضی‌شده",
   no_followup: "بدون پیگیری",
+  renewed: "تمدیدشده",
   abandoned: "رهاشده",
 };
 
