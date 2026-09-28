@@ -3,6 +3,7 @@ import { requireUser, LogoutButton } from "@/modules/auth";
 import { can } from "@/modules/permissions";
 import { ROLE_LABELS } from "@/modules/employees";
 import { SearchBox } from "@/modules/search";
+import { NotificationBell, countMyUnread } from "@/modules/notifications";
 import { AppShell, type NavItem } from "@/components/layout/app-shell";
 
 // Shared layout for the manager + supervisor route group. It authenticates the
@@ -40,6 +41,8 @@ export default async function ManagerLayout({
     can(user, "reports.view") && { href: "/reports", label: "گزارش‌ها" },
   ].filter(Boolean) as NavItem[];
 
+  const unreadCount = await countMyUnread(user.id);
+
   return (
     <AppShell
       navItems={navItems}
@@ -47,6 +50,12 @@ export default async function ManagerLayout({
       roleLabel={ROLE_LABELS[user.role]}
       logout={<LogoutButton />}
       searchSlot={<SearchBox />}
+      notificationBell={
+        <NotificationBell
+          initialUnread={unreadCount}
+          basePath="/notifications"
+        />
+      }
     >
       {children}
     </AppShell>

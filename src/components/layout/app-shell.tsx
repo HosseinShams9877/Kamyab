@@ -14,7 +14,7 @@ import { usePathname } from "next/navigation";
 // client bundle.
 //
 // The app is always RTL, so the sidebar sits at the start (right) edge. On
-// desktop it is a static column; on mobile it collapses into an off-canvas
+// desktop it is a sticky column; on mobile it collapses into an off-canvas
 // drawer toggled by the hamburger button and dismissed by a backdrop.
 
 export type NavItem = { href: string; label: string };
@@ -25,6 +25,7 @@ export function AppShell({
   roleLabel,
   logout,
   searchSlot,
+  notificationBell,
   children,
 }: {
   navItems: NavItem[];
@@ -32,6 +33,8 @@ export function AppShell({
   roleLabel: string;
   logout: React.ReactNode;
   searchSlot?: React.ReactNode;
+  /** Optional notification bell rendered in the header (manager + employee). */
+  notificationBell?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -58,12 +61,12 @@ export function AppShell({
       )}
 
       {/* Sidebar — off-canvas drawer on mobile (anchored to the right and
-          sliding off to the right), static column from lg up. */}
+          sliding off to the right), sticky column from lg up. */}
       <aside
-  className={`fixed inset-y-0 right-0 z-40 flex w-64 max-w-[80vw] flex-col border-e border-border bg-card transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-64 lg:shrink-0 lg:translate-x-0 ${
-    open ? "translate-x-0" : "translate-x-full"
-  }`}
->
+        className={`fixed inset-y-0 right-0 z-40 flex w-64 max-w-[80vw] flex-col border-e border-border bg-card transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-64 lg:shrink-0 lg:translate-x-0 ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
         <div className="flex h-16 shrink-0 items-center border-b border-border px-5">
           <span className="text-lg font-bold text-primary">سامانه کامیاب</span>
         </div>
@@ -78,10 +81,10 @@ export function AppShell({
                     onClick={() => setOpen(false)}
                     aria-current={active ? "page" : undefined}
                     className={`flex min-h-[44px] items-center rounded-control px-3 text-sm font-medium transition-colors ${
-  active
-    ? "bg-primary/10 text-primary"
-    : "text-text hover:bg-primary/10 hover:text-primary"
-}`}
+                      active
+                        ? "bg-primary/10 text-primary"
+                        : "text-text hover:bg-primary/10 hover:text-primary"
+                    }`}
                   >
                     {item.label}
                   </Link>
@@ -121,6 +124,9 @@ export function AppShell({
           {/* Global-search slot (C-16). The route-group layout passes the
               search box in; it falls back to nothing if a layout omits it. */}
           <div className="min-w-0 flex-1">{searchSlot}</div>
+
+          {/* Notification bell — optional; the route-group layout decides. */}
+          {notificationBell && <div className="shrink-0">{notificationBell}</div>}
 
           <div className="hidden text-right sm:block">
             <div className="text-sm font-medium text-text">{userName}</div>

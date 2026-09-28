@@ -3,6 +3,7 @@ import { requireUser, LogoutButton } from "@/modules/auth";
 import { can } from "@/modules/permissions";
 import { ROLE_LABELS } from "@/modules/employees";
 import { SearchBox } from "@/modules/search";
+import { NotificationBell, countMyUnread } from "@/modules/notifications";
 import { AppShell, type NavItem } from "@/components/layout/app-shell";
 
 // Shared layout for the employee route group (C-15). Same shell as the manager
@@ -36,6 +37,8 @@ export default async function EmployeeLayout({
     can(user, "renewals.view") && { href: "/employee/renewals", label: "تمدیدها" },
   ].filter(Boolean) as NavItem[];
 
+  const unreadCount = await countMyUnread(user.id);
+
   return (
     <AppShell
       navItems={navItems}
@@ -43,6 +46,12 @@ export default async function EmployeeLayout({
       roleLabel={ROLE_LABELS[user.role]}
       logout={<LogoutButton />}
       searchSlot={<SearchBox />}
+      notificationBell={
+        <NotificationBell
+          initialUnread={unreadCount}
+          basePath="/employee/notifications"
+        />
+      }
     >
       {children}
     </AppShell>
