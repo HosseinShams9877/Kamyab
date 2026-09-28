@@ -177,3 +177,25 @@ export async function reminderRuleBelongsToService(
   });
   return row !== null;
 }
+
+// --- Service stats (B-1 list header) ----------------------------------------
+
+/** Total number of services (active + inactive). */
+export function countServices(): Promise<number> {
+  return prisma.service.count();
+}
+
+/** Services whose status is true (active). */
+export function countActiveServices(): Promise<number> {
+  return prisma.service.count({ where: { status: true } });
+}
+
+/** Services that are renewable (regardless of active). */
+export function countRenewableServices(): Promise<number> {
+  return prisma.service.count({ where: { renewable: true } });
+}
+
+/** Total number of active reminder rules across all services. */
+export function countActiveReminderRules(): Promise<number> {
+  return prisma.reminderRule.count({ where: { active: true } });
+}

@@ -12,6 +12,7 @@ import type {
   ReminderRuleRow,
   ServiceDetail,
   ServiceListItem,
+  ServiceStats,
 } from "./services.types";
 import type {
   ServiceCreateInput,
@@ -21,10 +22,7 @@ import type {
 } from "./services.schema";
 
 // Business logic for the services domain (B-1 service definition, B-4 reminder
-// rules). Owns all Persian rule messages and the single delete transaction. Talks
-// to other modules only through their public barrels (rule 9): categories come
-// from @/modules/settings, and the path stages + durations that share a service's
-// lifetime are cleared through @/modules/paths.
+// rules). Owns all Persian rule messages and the single delete transaction.
 
 const DUPLICATE_NAME = "خدمتی با این نام از قبل وجود دارد.";
 const CATEGORY_INVALID = "دسته‌بندی انتخاب‌شده معتبر نیست.";
@@ -53,6 +51,17 @@ export async function listCategoryOptions(): Promise<CategoryOption[]> {
   return items
     .filter((i) => i.active)
     .map((i) => ({ id: i.id, title: i.title }));
+}
+
+/** The four headline stats above the services list (B-1). */
+export async function getServiceStats(): Promise<ServiceStats> {
+  const [total, active, renewable, reminderRules] = await Promise.all([
+    repo.countServices(),
+    repo.countActiveServices(),
+    repo.countRenewableServices(),
+    repo.countActiveReminderRules(),
+  ]);
+  return { total, active, renewable, reminderRules };
 }
 
 /** Normalize an optional description: empty/whitespace becomes null. */
@@ -117,9 +126,7 @@ export async function setServiceStatus(id: string, status: boolean): Promise<voi
 
 /**
  * Delete a service (B-1). Allowed ONLY when no case has ever been built from it;
- * otherwise the caller must deactivate instead. The delete clears the whole
- * definition (stages + durations via the paths module, then reminder rules and
- * the service row) in one transaction.
+ * otherwise the caller must deactivate instead.
  */
 export async function deleteService(id: string): Promise<void> {
   const caseCount = await repo.countServiceCases(id);
@@ -182,3 +189,4 @@ export async function deleteReminderRule(
 }
 
 export { ServiceRuleError } from "./services.guards";
+export type { ServiceStats } from "./services.types";

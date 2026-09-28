@@ -6,20 +6,19 @@ import { useRouter } from "next/navigation";
 import type { ReminderRuleRow } from "@/modules/services/services.types";
 import type { ReminderChannel, ReminderRecipient } from "@/types/enums";
 import {
-  REMINDER_CHANNEL_LABELS,
-  REMINDER_CHANNEL_OPTIONS,
   REMINDER_RECIPIENT_LABELS,
   REMINDER_RECIPIENT_OPTIONS,
   daysBeforeLabel,
 } from "../lib/labels";
 
-// Reminder rules editor (B-4): each rule is days-before-expiry (positive = before,
-// zero = on expiry, negative = after), a channel, a recipient, and an active
-// flag. Add/edit/toggle/delete save immediately. Only shown for renewable
-// services (the detail page hides it otherwise; the API re-checks).
+// One reminder-rules editor scoped to a single channel (B-4): the service has
+// two independent lists — internal notifications (INTERNAL_NOTIFICATION) and
+// customer SMS (SMS_TO_CUSTOMER). The channel is fixed by the parent; the
+// recipient picker is restricted to the recipients valid for that channel.
 
 type Props = {
   serviceId: string;
+  channel: ReminderChannel;
   rules: ReminderRuleRow[];
   canEdit: boolean;
 };
@@ -31,28 +30,41 @@ const btn =
 
 type Draft = {
   daysBefore: string;
-  channel: ReminderChannel;
   recipient: ReminderRecipient;
   active: boolean;
 };
 
-const EMPTY_DRAFT: Draft = {
-  daysBefore: "",
-  channel: "INTERNAL_NOTIFICATION",
-  recipient: "CASE_OWNER",
-  active: true,
+/** Valid recipients per channel. */
+const RECIPIENTS_BY_CHANNEL: Record<ReminderChannel, ReminderRecipient[]> = {
+  INTERNAL_NOTIFICATION: ["CASE_OWNER", "ALL_MANAGERS"],
+  SMS_TO_CUSTOMER: ["CUSTOMER"],
 };
 
-// Hoisted to module scope on purpose: defining it inside the component would give
-// React a new component identity on every keystroke, remounting the inputs and
-// dropping focus mid-typing. As a stable module-level component it keeps focus.
+const TITLE_BY_CHANNEL: Record<ReminderChannel, string> = {
+  INTERNAL_NOTIFICATION: "یادآوری داخلی",
+  SMS_TO_CUSTOMER: "پیامک مشتری",
+};
+
+function emptyDraft(channel: ReminderChannel): Draft {
+  return {
+    daysBefore: "",
+    recipient: RECIPIENTS_BY_CHANNEL[channel][0],
+    active: true,
+  };
+}
+
+// Hoisted to module scope on purpose: a stable component identity keeps input
+// focus across keystrokes.
 function DraftFields({
   value,
   onChange,
+  channel,
 }: {
   value: Draft;
   onChange: (d: Draft) => void;
+  channel: ReminderChannel;
 }) {
+  const allowed = RECIPIENTS_BY_CHANNEL[channel];
   return (
     <>
       <input
@@ -60,20 +72,9 @@ function DraftFields({
         inputMode="numeric"
         value={value.daysBefore}
         onChange={(e) => onChange({ ...value, daysBefore: e.target.value })}
-        placeholder="روز نسبت به انقضا"
+        placeholder="روز قبل از انقضا"
         className={`${inputClass} w-full sm:w-36`}
       />
-      <select
-        value={value.channel}
-        onChange={(e) =>
-          onChange({ ...value, channel: e.target.value as ReminderChannel })
-        }
-        className={`${inputClass} w-full sm:w-auto`}
-      >
-        {REMINDER_CHANNEL_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
       <select
         value={value.recipient}
         onChange={(e) =>
@@ -81,9 +82,11 @@ function DraftFields({
         }
         className={`${inputClass} w-full sm:w-auto`}
       >
-        {REMINDER_RECIPIENT_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
+        {REMINDER_RECIPIENT_OPTIONS.filter((o) => allowed.includes(o.value)).map(
+          (o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ),
+        )}
       </select>
       <label className="flex items-center gap-1.5 whitespace-nowrap text-sm text-text">
         <input
@@ -97,16 +100,16 @@ function DraftFields({
   );
 }
 
-export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
+export function ReminderRulesEditor({ serviceId, channel, rules, canEdit }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<Draft>(() => emptyDraft(channel));
   const [addError, setAddError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(
     null,
   );
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [editDraft, setEditDraft] = useState<Draft>(() => emptyDraft(channel));
 
   const base = `/api/services/${serviceId}/reminder-rules`;
 
@@ -131,10 +134,10 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
     setAddError(null);
     if (busy) return;
     setBusy(true);
-    const data = await call(base, "POST", draft);
+    const data = await call(base, "POST", { ...draft, channel });
     setBusy(false);
     if (data.ok) {
-      setDraft(EMPTY_DRAFT);
+      setDraft(emptyDraft(channel));
       router.refresh();
     } else {
       setAddError(data.message ?? "افزودن قاعده انجام نشد.");
@@ -145,7 +148,7 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
     if (busy) return;
     setBusy(true);
     setRowError(null);
-    const data = await call(`${base}/${id}`, "PATCH", editDraft);
+    const data = await call(`${base}/${id}`, "PATCH", { ...editDraft, channel });
     setBusy(false);
     if (data.ok) {
       setEditingId(null);
@@ -161,7 +164,7 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
     setRowError(null);
     const data = await call(`${base}/${rule.id}`, "PATCH", {
       daysBefore: rule.daysBefore,
-      channel: rule.channel,
+      channel,
       recipient: rule.recipient,
       active: !rule.active,
     });
@@ -182,20 +185,22 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
 
   return (
     <section className="rounded-card border border-border bg-card p-6 shadow-card">
-      <h3 className="mb-4 text-base font-bold text-text">قواعد یادآوری</h3>
+      <h3 className="mb-4 text-base font-bold text-text">
+        {TITLE_BY_CHANNEL[channel]}
+      </h3>
 
       <div className="space-y-3">
         {canEdit && (
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <DraftFields value={draft} onChange={setDraft} />
+              <DraftFields value={draft} onChange={setDraft} channel={channel} />
               <button
                 type="button"
                 onClick={add}
                 disabled={busy || draft.daysBefore.trim() === ""}
                 className={`${btn} bg-primary text-white hover:bg-primary-hover`}
               >
-                افزودن قاعده
+                + افزودن قاعده
               </button>
             </div>
             {addError && <p className="text-sm text-error">{addError}</p>}
@@ -212,7 +217,11 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
               <li key={rule.id} className="px-3 py-2.5">
                 {editingId === rule.id ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <DraftFields value={editDraft} onChange={setEditDraft} />
+                    <DraftFields
+                      value={editDraft}
+                      onChange={setEditDraft}
+                      channel={channel}
+                    />
                     <button
                       type="button"
                       onClick={() => saveEdit(rule.id)}
@@ -233,9 +242,6 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex-1 text-sm text-text">
                       {daysBeforeLabel(rule.daysBefore)}
-                    </span>
-                    <span className="rounded-badge bg-info-bg px-2 py-0.5 text-xs text-info">
-                      {REMINDER_CHANNEL_LABELS[rule.channel]}
                     </span>
                     <span className="rounded-badge bg-page px-2 py-0.5 text-xs text-text-secondary">
                       {REMINDER_RECIPIENT_LABELS[rule.recipient]}
@@ -261,7 +267,6 @@ export function ReminderRulesEditor({ serviceId, rules, canEdit }: Props) {
                             setEditingId(rule.id);
                             setEditDraft({
                               daysBefore: String(rule.daysBefore),
-                              channel: rule.channel,
                               recipient: rule.recipient,
                               active: rule.active,
                             });

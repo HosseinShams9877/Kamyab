@@ -37,3 +37,11 @@ export type ReminderRuleRow = {
   recipient: ReminderRecipient;
   active: boolean;
 };
+
+/** The four headline stats above the services list (B-1). */
+export type ServiceStats = {
+  total: number;
+  active: number;
+  renewable: number;
+  reminderRules: number;
+};

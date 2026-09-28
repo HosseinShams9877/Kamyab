@@ -7,25 +7,19 @@ import {
   listCategoryOptions,
   listReminderRules,
   ServiceForm,
-  ReminderRulesEditor,
 } from "@/modules/services";
-import {
-  getServicePaths,
-  listDurations,
-  PathEditor,
-  DurationsEditor,
-} from "@/modules/paths";
+import { getServicePaths, listDurations } from "@/modules/paths";
 
-// Service detail (B-1..B-4). Server component: authorizes, reads the service and
-// its full definition through the two modules, and renders the editors. The
-// renewal path, durations, and reminder rules appear only for a renewable
-// service (B-2/B-3/B-4); the APIs re-check every rule regardless.
-
+// Service detail (B-1/B-2/B-3/B-4). Server component: loads the service + all
+// related data, then hands them to the client ServiceForm, which reveals the
+// path/duration/reminder editors live when the renewable toggle is on.
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ id: string }> };
-
-export default async function ServiceDetailPage({ params }: Props) {
+export default async function ServiceDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const user = await requireUser();
   if (user.role === "EMPLOYEE") redirect("/employee");
   if (!can(user, "services.view")) redirect("/dashboard");
@@ -43,46 +37,41 @@ export default async function ServiceDetailPage({ params }: Props) {
   ]);
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 px-4 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-text break-words">{service.name}</h1>
+    <main className="mx-auto w-full px-4 py-10">
+      <div className="mb-6">
         <Link href="/services" className="text-sm text-primary hover:underline">
           ← بازگشت به خدمات
         </Link>
       </div>
 
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-text">{service.name}</h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          {service.renewable
+            ? "این خدمت تمدیدشونده است؛ مدت اعتبار، مسیر تمدید و قواعد یادآوری دارد."
+            : "این خدمت تمدیدشونده نیست؛ فقط مسیر ثبت اولیه دارد."}
+        </p>
+      </div>
+
       <section className="rounded-card border border-border bg-card p-6 shadow-card">
-        <h2 className="mb-4 text-lg font-bold text-text">مشخصات خدمت</h2>
-        <ServiceForm mode="edit" categories={categories} service={service} />
-      </section>
-
-      <PathEditor
-        serviceId={id}
-        pathType="INITIAL"
-        stages={paths.initial}
-        canEdit={canEdit}
-      />
-
-      {service.renewable && (
-        <>
-          <PathEditor
-            serviceId={id}
-            pathType="RENEWAL"
-            stages={paths.renewal}
-            canEdit={canEdit}
-          />
-          <DurationsEditor
-            serviceId={id}
+        <h2 className="mb-4 text-base font-bold text-text">اطلاعات خدمت</h2>
+        {categories.length === 0 ? (
+          <p className="text-sm text-text-secondary">
+            ابتدا از بخش تنظیمات یک دسته‌بندی خدمات تعریف کنید.
+          </p>
+        ) : (
+          <ServiceForm
+            mode="edit"
+            categories={categories}
+            service={service}
+            initialStages={paths.initial}
+            renewalStages={paths.renewal}
             durations={durations}
+            reminderRules={reminderRules}
             canEdit={canEdit}
           />
-          <ReminderRulesEditor
-            serviceId={id}
-            rules={reminderRules}
-            canEdit={canEdit}
-          />
-        </>
-      )}
+        )}
+      </section>
     </main>
   );
 }

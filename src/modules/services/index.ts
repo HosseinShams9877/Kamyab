@@ -14,6 +14,7 @@ export {
   updateService,
   setServiceStatus,
   deleteService,
+  getServiceStats,
   listReminderRules,
   createReminderRule,
   updateReminderRule,
@@ -42,6 +43,7 @@ export type {
   CategoryOption,
   ServiceListItem,
   ServiceDetail,
+  ServiceStats,
   ReminderRuleRow,
 } from "./services.types";
 
