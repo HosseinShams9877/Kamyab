@@ -8,9 +8,9 @@ import type {
   OwnerFilterOption,
 } from "../cases.types";
 
-// The cases list card (C-2 / C-15): ONE rounded card holding the filter bar,
-// the table, and the pagination. Server-rendered; the filter bar is a GET form
-// so every query lives in the URL.
+// The cases list card (C-2 / C-15): filter bar + table + pagination.
+// The owner filter is optional (showOwnerFilter) — managers see it, employees
+// do not (their list is already owner-scoped).
 
 type Props = {
   items: CaseListItem[];
@@ -21,6 +21,8 @@ type Props = {
   pageCount: number;
   total: number;
   buildPageHref: (page: number) => string;
+  /** Whether to render the "مسئول" filter. Managers: true, employees: false. */
+  showOwnerFilter?: boolean;
 };
 
 const inputClass =
@@ -44,13 +46,15 @@ export function CasesTable({
   pageCount,
   total,
   buildPageHref,
+  showOwnerFilter = true,
 }: Props) {
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
-      {/* Filter bar */}
+      {/* Filter bar — submits to the current URL, so it works in both the
+          manager /cases and the employee /employee/cases page. */}
       <form
         method="get"
-        action="/cases"
+        action="."
         className="grid grid-cols-1 gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-5"
       >
         <div className="sm:col-span-2">
@@ -65,40 +69,28 @@ export function CasesTable({
         <div>
           <select name="status" defaultValue={params.status ?? ""} className={inputClass}>
             {STATUS_VALUES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+              <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
         </div>
         <div>
-          <select
-            name="serviceId"
-            defaultValue={params.serviceId ?? ""}
-            className={inputClass}
-          >
+          <select name="serviceId" defaultValue={params.serviceId ?? ""} className={inputClass}>
             <option value="">خدمت</option>
             {services.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </div>
-        <div>
-          <select
-            name="ownerId"
-            defaultValue={params.ownerId ?? ""}
-            className={inputClass}
-          >
-            <option value="">مسئول</option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.fullName}
-              </option>
-            ))}
-          </select>
-        </div>
+        {showOwnerFilter && (
+          <div>
+            <select name="ownerId" defaultValue={params.ownerId ?? ""} className={inputClass}>
+              <option value="">مسئول</option>
+              {owners.map((o) => (
+                <option key={o.id} value={o.id}>{o.fullName}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex items-end sm:col-span-2 lg:col-span-5 lg:justify-end">
           <button
             type="submit"
@@ -140,9 +132,7 @@ export function CasesTable({
                   {toPersianDigits(c.lastActivity)}
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={`rounded-badge px-2.5 py-0.5 text-xs ${CASE_STATUS_BADGE[c.status]}`}
-                  >
+                  <span className={`rounded-badge px-2.5 py-0.5 text-xs ${CASE_STATUS_BADGE[c.status]}`}>
                     {CASE_STATUS_LABELS[c.status]}
                   </span>
                 </td>
