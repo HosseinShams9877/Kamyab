@@ -14,6 +14,7 @@ import {
   type TaskOwnerOption,
   type TaskServiceOption,
 } from "@/modules/tasks";
+import { listActiveResults } from "@/modules/followups";
 import { listCaseOwnerOptions } from "@/modules/employees";
 import { toPersianDigits } from "@/lib/digits";
 
@@ -55,11 +56,12 @@ export default async function TasksPage({
         : "",
   };
 
-  const [tasks, stats, services, ownerRows] = await Promise.all([
+  const [tasks, stats, services, ownerRows, results] = await Promise.all([
     getTasksView(user, tab, params),
     getTaskStats(user),
     listTaskServiceOptions(),
     listCaseOwnerOptions(),
+    listActiveResults(),
   ]);
 
   const owners: TaskOwnerOption[] = ownerRows.map((o) => ({
@@ -127,6 +129,7 @@ export default async function TasksPage({
         tabs={tabs}
         owners={owners}
         services={serviceOptions}
+        results={results.map((r) => ({ id: r.id, title: r.title }))}
         params={params}
       />
     </main>

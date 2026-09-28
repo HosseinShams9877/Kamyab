@@ -39,16 +39,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
 
-  const parsed = caseCreateSchema.safeParse(await request.json());
+  const body = await request.json();
+  const parsed = caseCreateSchema.safeParse(body);
   if (!parsed.success) {
+    // DEBUG: log the exact Zod failure and the raw body to the terminal.
+    console.error("=== ZOD ERROR on POST /api/cases ===");
+    console.error("RAW BODY:", JSON.stringify(body, null, 2));
+    console.error("ZOD ISSUES:", JSON.stringify(parsed.error.issues, null, 2));
     return NextResponse.json(
-      { ok: false, message: "اطلاعات واردشده معتبر نیست." },
+      {
+        ok: false,
+        field: parsed.error.issues[0]?.path?.[0] ?? null,
+        message: parsed.error.issues[0]?.message ?? "اطلاعات واردشده معتبر نیست.",
+      },
       { status: 422 },
     );
   }
 
   const result = await registerCase(user.id, parsed.data);
   if (!result.ok) {
+    // DEBUG: log the service-level rule failure.
+    console.error("=== SERVICE ERROR on POST /api/cases ===");
+    console.error("FIELD:", result.field, "MESSAGE:", result.message);
     return NextResponse.json(
       { ok: false, field: result.field, message: result.message },
       { status: 409 },

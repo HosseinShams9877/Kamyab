@@ -50,10 +50,15 @@ function optionalJalaliNotFuture(message: string) {
     );
 }
 
-/** Optional total amount in whole Toman (0 .. 2,000,000,000). Empty → null. */
+/** Optional total amount in whole Toman (0 .. 2,000,000,000).
+ *  Accepts string, number, or null; result is `number | null`. Empty → null. */
 const optionalAmount = z
-  .string()
-  .transform((v) => toEnglishDigits(v.trim()))
+  .union([z.string(), z.number(), z.null()])
+  .transform((v) => {
+    if (v === null) return "";
+    if (typeof v === "number") return String(v);
+    return toEnglishDigits(v.trim());
+  })
   .refine((v) => v === "" || /^\d+$/.test(v), { message: "مبلغ باید عددی باشد." })
   .refine((v) => v === "" || Number(v) <= 2_000_000_000, {
     message: "مبلغ واردشده بیش از حد مجاز است.",

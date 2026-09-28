@@ -14,8 +14,8 @@ import { TasksTable } from "./tasks-table";
 // The interactive tasks page body (C-11): the seven-tab navigation and the
 // filterable table. The create form lives on its own page (/tasks/new), linked
 // from the page header's "+ ثبت کار جدید" button — this panel only lists and
-// filters. Client leaf: imports isomorphic leaves; the table is server-rendered
-// with a GET-form filter bar.
+// filters. Client leaf: imports isomorphic leaves; the table is a client
+// component that opens the record-result modal.
 
 export function TasksPanel({
   tasks,
@@ -23,6 +23,7 @@ export function TasksPanel({
   tabs,
   owners,
   services,
+  results,
   params,
   basePath = "/tasks",
 }: {
@@ -31,13 +32,13 @@ export function TasksPanel({
   tabs: { key: TaskTab; label: string }[];
   owners: TaskOwnerOption[];
   services: TaskServiceOption[];
+  results: { id: string; title: string }[];
   params: TaskListParams;
   basePath?: string;
 }) {
   return (
     <div>
       {/* Tabs */}
-            {/* Tabs */}
       <div
         role="tablist"
         className="flex gap-1 overflow-x-auto rounded-t-card border border-b-0 border-border bg-card px-2 shadow-card"
@@ -68,6 +69,7 @@ export function TasksPanel({
         params={params}
         owners={owners}
         services={services}
+        results={results}
         basePath={basePath}
         currentTab={tab}
       />
