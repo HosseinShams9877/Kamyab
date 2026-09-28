@@ -16,10 +16,6 @@ import type {
 } from "../tasks.types";
 import { RecordResultDialog } from "@/modules/followups/components/record-result-dialog";
 
-// The tasks list table (C-11): a filter bar + table inside one rounded card.
-// Client component because the "ثبت نتیجه" action opens a modal that owns its
-// own state; the row data still arrives pre-computed from the server.
-
 type Props = {
   items: TaskRow[];
   params: TaskListParams;
@@ -28,6 +24,7 @@ type Props = {
   results: { id: string; title: string }[];
   basePath: string;
   currentTab: string;
+  showOwnerFilter?: boolean;
 };
 
 const inputClass =
@@ -43,13 +40,13 @@ export function TasksTable({
   results,
   basePath,
   currentTab,
+  showOwnerFilter = true,
 }: Props) {
   const [recording, setRecording] = useState<TaskRow | null>(null);
 
   return (
     <>
       <div className="overflow-hidden rounded-b-card border border-t-0 border-border bg-card shadow-card">
-        {/* Filter bar */}
         <form
           method="get"
           action={basePath}
@@ -65,45 +62,29 @@ export function TasksTable({
               className={inputClass}
             />
           </div>
+          {showOwnerFilter && (
+            <div>
+              <select name="ownerId" defaultValue={params.ownerId ?? ""} className={inputClass}>
+                <option value="">مسئول</option>
+                {owners.map((o) => (
+                  <option key={o.id} value={o.id}>{o.fullName}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
-            <select
-              name="ownerId"
-              defaultValue={params.ownerId ?? ""}
-              className={inputClass}
-            >
-              <option value="">مسئول</option>
-              {owners.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.fullName}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select
-              name="serviceId"
-              defaultValue={params.serviceId ?? ""}
-              className={inputClass}
-            >
+            <select name="serviceId" defaultValue={params.serviceId ?? ""} className={inputClass}>
               <option value="">خدمت</option>
               {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
           <div>
-            <select
-              name="priority"
-              defaultValue={params.priority ?? ""}
-              className={inputClass}
-            >
+            <select name="priority" defaultValue={params.priority ?? ""} className={inputClass}>
               <option value="">اولویت</option>
               {PRIORITY_VALUES.map((p) => (
-                <option key={p} value={p}>
-                  {TASK_PRIORITY_LABELS[p]}
-                </option>
+                <option key={p} value={p}>{TASK_PRIORITY_LABELS[p]}</option>
               ))}
             </select>
           </div>
@@ -117,7 +98,6 @@ export function TasksTable({
           </div>
         </form>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-right text-sm">
             <thead className="bg-page text-text-secondary">
@@ -135,9 +115,7 @@ export function TasksTable({
             <tbody>
               {items.map((t) => (
                 <tr key={t.id} className="border-t border-border">
-                  <td className="px-4 py-3 text-text break-words font-medium">
-                    {t.title}
-                  </td>
+                  <td className="px-4 py-3 text-text break-words font-medium">{t.title}</td>
                   <td className="px-4 py-3 text-text-secondary">
                     {t.caseNumber ? (
                       <span dir="ltr" className="text-text">
@@ -145,29 +123,19 @@ export function TasksTable({
                       </span>
                     ) : null}
                     {t.customerName ? (
-                      <div
-                        className={
-                          t.caseNumber
-                            ? "mt-1 text-xs text-text-secondary"
-                            : "text-text"
-                        }
-                      >
+                      <div className={t.caseNumber ? "mt-1 text-xs text-text-secondary" : "text-text"}>
                         {t.customerName}
                       </div>
                     ) : null}
                     {!t.caseNumber && !t.customerName && "—"}
                   </td>
-                  <td className="px-4 py-3 text-text-secondary">
-                    {t.serviceName ?? "—"}
-                  </td>
+                  <td className="px-4 py-3 text-text-secondary">{t.serviceName ?? "—"}</td>
                   <td className="px-4 py-3 text-text-secondary">{t.ownerName}</td>
                   <td className="px-4 py-3 text-text-secondary" dir="ltr">
                     {toPersianDigits(t.dueDate)}
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-badge px-2.5 py-0.5 text-xs ${TASK_PRIORITY_BADGE[t.priority]}`}
-                    >
+                    <span className={`rounded-badge px-2.5 py-0.5 text-xs ${TASK_PRIORITY_BADGE[t.priority]}`}>
                       {TASK_PRIORITY_LABELS[t.priority]}
                     </span>
                   </td>
@@ -203,10 +171,7 @@ export function TasksTable({
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-8 text-center text-text-secondary"
-                  >
+                  <td colSpan={8} className="px-4 py-8 text-center text-text-secondary">
                     کاری در این نما وجود ندارد.
                   </td>
                 </tr>

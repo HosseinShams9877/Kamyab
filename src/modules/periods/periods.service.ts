@@ -28,6 +28,7 @@ import type {
 
 const PASSED_STAGE_STATUSES = ["DONE", "NOT_NEEDED"];
 
+/** A stored Date back to an ASCII Jalali "YYYY/MM/DD" string. */
 function dateToJalali(date: Date | null): string | null {
   if (!date) return null;
   return formatJalali(toJalali(date), { persianDigits: false });
@@ -312,8 +313,9 @@ function toRenewalRow(
   };
 }
 
-/** The four headline stats above the renewals table (C-10). */
-export async function getRenewalStats(): Promise<RenewalStats> {
+/** The four headline stats above the renewals table (C-10). When `ownerId` is
+ *  given, the counts are scoped to that employee's cases (C-15 employee panel). */
+export async function getRenewalStats(ownerId?: string): Promise<RenewalStats> {
   const rows = await repo.findRenewalsQueue();
   const now = new Date();
   let expired = 0;
@@ -322,6 +324,7 @@ export async function getRenewalStats(): Promise<RenewalStats> {
   let beyond30 = 0;
   for (const r of rows) {
     if (r.status !== "ACTIVE") continue;
+    if (ownerId && r.case.ownerId !== ownerId) continue;
     const d = daysRemainingFromDate(r.expiryDate, now);
     if (d === null) continue;
     if (d < 0) expired += 1;

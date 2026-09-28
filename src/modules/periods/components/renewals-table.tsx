@@ -6,8 +6,6 @@ import { toPersianDigits } from "@/lib/digits";
 import type { RenewalRow, RenewalListParams } from "../periods.types";
 import { FOLLOW_UP_STATUS_LABELS, FOLLOW_UP_STATUS_BADGE } from "../lib/labels";
 
-// The renewals work-queue table (C-10): filter bar + table.
-
 export type RenewalTableRow = RenewalRow & {
   canAbandon: boolean;
   canRestore: boolean;
@@ -40,6 +38,7 @@ type Props = {
   services: { id: string; name: string }[];
   basePath: string;
   currentTab: string;
+  showFilters?: boolean;
 };
 
 export function RenewalsTable({
@@ -49,6 +48,7 @@ export function RenewalsTable({
   services,
   basePath,
   currentTab,
+  showFilters = true,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -89,61 +89,57 @@ export function RenewalsTable({
         </p>
       )}
       <div className="overflow-hidden rounded-b-card border border-t-0 border-border bg-card shadow-card">
-        {/* Filter bar */}
-        <form
-          method="get"
-          action={basePath}
-          className="grid grid-cols-1 gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          <input type="hidden" name="tab" value={currentTab} />
-          <div className="sm:col-span-2">
-            <input
-              name="q"
-              type="text"
-              defaultValue={params.q ?? ""}
-              placeholder="نام مشتری، موبایل یا شماره پرونده…"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <select name="serviceId" defaultValue={params.serviceId ?? ""} className={inputClass}>
-              <option value="">خدمت</option>
-              {services.map((s) => (
-                <option key={s.id} value={s.name}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select name="ownerId" defaultValue={params.ownerId ?? ""} className={inputClass}>
-              <option value="">مسئول</option>
-              {owners.map((o) => (
-                <option key={o.id} value={o.id}>{o.fullName}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select
-              name="followUpStatus"
-              defaultValue={params.followUpStatus ?? ""}
-              className={inputClass}
-            >
-              <option value="">وضعیت پیگیری</option>
-              {FOLLOW_UP_OPTIONS.map((s) => (
-                <option key={s} value={s}>{FOLLOW_UP_STATUS_LABELS[s]}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end sm:col-span-2 lg:col-span-4 lg:justify-end">
-            <button
-              type="submit"
-              className="min-h-[44px] rounded-control bg-primary px-6 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:min-h-0 sm:py-2"
-            >
-              اعمال فیلتر
-            </button>
-          </div>
-        </form>
+        {showFilters && (
+          <form
+            method="get"
+            action={basePath}
+            className="grid grid-cols-1 gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-4"
+          >
+            <input type="hidden" name="tab" value={currentTab} />
+            <div className="sm:col-span-2">
+              <input
+                name="q"
+                type="text"
+                defaultValue={params.q ?? ""}
+                placeholder="نام مشتری، موبایل یا شماره پرونده…"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <select name="serviceId" defaultValue={params.serviceId ?? ""} className={inputClass}>
+                <option value="">خدمت</option>
+                {services.map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <select name="ownerId" defaultValue={params.ownerId ?? ""} className={inputClass}>
+                <option value="">مسئول</option>
+                {owners.map((o) => (
+                  <option key={o.id} value={o.id}>{o.fullName}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <select name="followUpStatus" defaultValue={params.followUpStatus ?? ""} className={inputClass}>
+                <option value="">وضعیت پیگیری</option>
+                {FOLLOW_UP_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{FOLLOW_UP_STATUS_LABELS[s]}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end sm:col-span-2 lg:col-span-4 lg:justify-end">
+              <button
+                type="submit"
+                className="min-h-[44px] rounded-control bg-primary px-6 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:min-h-0 sm:py-2"
+              >
+                اعمال فیلتر
+              </button>
+            </div>
+          </form>
+        )}
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-right text-sm">
             <thead className="bg-page text-text-secondary">

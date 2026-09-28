@@ -11,12 +11,6 @@ import type {
   EmployeeFilterOption,
 } from "../customers.types";
 
-// The customer list card (C-3): ONE rounded card holding the filter bar, the
-// table, and the pagination — matching the reference layout. It is purely
-// presentational and server-rendered; the filter bar is a GET form, so every
-// query lives in the URL. The "پرونده مشتری" action sits inside the عملیات
-// column.
-
 type Props = {
   items: CustomerListItem[];
   params: CustomerListParams;
@@ -27,6 +21,7 @@ type Props = {
   pageCount: number;
   total: number;
   buildPageHref: (page: number) => string;
+  showOwnerFilter?: boolean;
 };
 
 const inputClass =
@@ -42,13 +37,13 @@ export function CustomersTable({
   pageCount,
   total,
   buildPageHref,
+  showOwnerFilter = true,
 }: Props) {
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
-      {/* Filter bar — a GET form so all state lives in the URL. */}
       <form
         method="get"
-        action="/customers"
+        action="."
         className="grid grid-cols-1 gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-6"
       >
         <div className="sm:col-span-2 lg:col-span-2">
@@ -71,40 +66,28 @@ export function CustomersTable({
           <select name="city" defaultValue={params.city ?? ""} className={inputClass}>
             <option value="">شهر</option>
             {cities.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </div>
         <div>
-          <select
-            name="serviceId"
-            defaultValue={params.serviceId ?? ""}
-            className={inputClass}
-          >
+          <select name="serviceId" defaultValue={params.serviceId ?? ""} className={inputClass}>
             <option value="">خدمت</option>
             {services.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </div>
-        <div>
-          <select
-            name="ownerId"
-            defaultValue={params.ownerId ?? ""}
-            className={inputClass}
-          >
-            <option value="">کارمند</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.fullName}
-              </option>
-            ))}
-          </select>
-        </div>
+        {showOwnerFilter && (
+          <div>
+            <select name="ownerId" defaultValue={params.ownerId ?? ""} className={inputClass}>
+              <option value="">کارمند</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>{e.fullName}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <select name="status" defaultValue={params.status ?? ""} className={inputClass}>
             <option value="">وضعیت</option>
@@ -129,7 +112,6 @@ export function CustomersTable({
         </div>
       </form>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] text-right text-sm">
           <thead className="bg-page text-text-secondary">
@@ -181,9 +163,7 @@ export function CustomersTable({
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-badge px-2.5 py-0.5 text-xs ${
-                      c.status
-                        ? "bg-success-bg text-success"
-                        : "bg-disabled-bg text-disabled"
+                      c.status ? "bg-success-bg text-success" : "bg-disabled-bg text-disabled"
                     }`}
                   >
                     {c.status ? "فعال" : "غیرفعال"}
@@ -210,7 +190,6 @@ export function CustomersTable({
         </table>
       </div>
 
-      {/* Pagination */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-text-secondary">
         <span>
           {toPersianDigits(String(total))} مشتری · صفحهٔ{" "}

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-// Isomorphic leaf imports (client-component exception): never a module barrel.
 import type {
   TaskRow,
   TaskTab,
@@ -10,12 +9,6 @@ import type {
   TaskListParams,
 } from "../tasks.types";
 import { TasksTable } from "./tasks-table";
-
-// The interactive tasks page body (C-11): the seven-tab navigation and the
-// filterable table. The create form lives on its own page (/tasks/new), linked
-// from the page header's "+ ثبت کار جدید" button — this panel only lists and
-// filters. Client leaf: imports isomorphic leaves; the table is a client
-// component that opens the record-result modal.
 
 export function TasksPanel({
   tasks,
@@ -26,6 +19,7 @@ export function TasksPanel({
   results,
   params,
   basePath = "/tasks",
+  showOwnerFilter = true,
 }: {
   tasks: TaskRow[];
   tab: TaskTab;
@@ -35,10 +29,10 @@ export function TasksPanel({
   results: { id: string; title: string }[];
   params: TaskListParams;
   basePath?: string;
+  showOwnerFilter?: boolean;
 }) {
   return (
     <div>
-      {/* Tabs */}
       <div
         role="tablist"
         className="flex gap-1 overflow-x-auto rounded-t-card border border-b-0 border-border bg-card px-2 shadow-card"
@@ -63,7 +57,6 @@ export function TasksPanel({
         })}
       </div>
 
-      {/* Table + filter */}
       <TasksTable
         items={tasks}
         params={params}
@@ -72,6 +65,7 @@ export function TasksPanel({
         results={results}
         basePath={basePath}
         currentTab={tab}
+        showOwnerFilter={showOwnerFilter}
       />
     </div>
   );

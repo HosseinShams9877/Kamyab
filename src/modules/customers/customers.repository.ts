@@ -2,17 +2,10 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { CustomerType } from "@/types/enums";
 
-// ALL Prisma access for the customers domain lives here (modular rule 9: the
-// repository is the only file that touches the database for this module, and it
-// is called only by customers.service). Persian text never appears in this
-// layer — it deals in ids, counts, and rows. Jalali<->Date conversion and
-// display-name formatting are business/presentation concerns handled by the
-// service, so this layer speaks in Date objects and raw columns.
+// ALL Prisma access for the customers domain lives here.
 
 const ACTIVE_CASE_STATUSES = ["NEW", "IN_PROGRESS"] as const;
 
-// The persisted column shape (dates as Date). The service maps this to the
-// public CustomerDetail (dates as Jalali strings).
 export type CustomerRow = {
   id: string;
   code: string;
@@ -33,7 +26,6 @@ export type CustomerRow = {
   status: boolean;
 };
 
-// The writable fields (no id/code — code is generated inside the transaction).
 export type CustomerWriteData = {
   type: CustomerType;
   fullName: string | null;
@@ -75,7 +67,6 @@ export async function findCustomerRowById(id: string): Promise<CustomerRow | nul
   return prisma.customer.findUnique({ where: { id }, select: CUSTOMER_SELECT });
 }
 
-/** For the mobile-uniqueness message: the current owner of a mobile, if any. */
 export async function findCustomerByMobile(mobile: string): Promise<{
   id: string;
   type: string;
@@ -89,13 +80,6 @@ export async function findCustomerByMobile(mobile: string): Promise<{
   });
 }
 
-/**
- * Create a customer, generating its per-Jalali-year code inside one transaction
- * so the sequence read and the insert cannot interleave. The 4-digit zero-padded
- * suffix means a lexical "desc" order over a single year's codes is also the
- * numeric order. A unique-collision from a race is surfaced to the service,
- * which retries.
- */
 export async function createCustomerWithCode(
   data: CustomerWriteData,
   jalaliYear: number,
@@ -143,7 +127,6 @@ export type ActiveCustomerRow = {
   sendGreeting: boolean;
 };
 
-/** Active customers matching an optional search term, for the case-form pick. */
 export async function listActiveCustomers(q: string): Promise<ActiveCustomerRow[]> {
   const where: Prisma.CustomerWhereInput = { status: true };
   if (q) {
@@ -174,8 +157,6 @@ export async function listActiveCustomers(q: string): Promise<ActiveCustomerRow[
   });
 }
 
-/** The birth/founding-date + greeting fields the case form may set on the
- *  customer, written on the caller's save transaction (rule 4). */
 export type BirthInfoPatch = {
   birthDate?: Date;
   foundingDate?: Date;
@@ -196,10 +177,6 @@ export async function countCustomerCases(id: string): Promise<number> {
 
 // --- Engine seams (C-14 / Phase 15) -----------------------------------------
 
-/** Active, greeting-enabled customers that have a birth or founding date to match
- *  today against, for the birthday / founding-day greeting. The service reduces
- *  the applicable date to Jalali parts; the once-a-year guard is the BirthdayLog
- *  unique index. */
 export type GreetingCandidateRow = {
   id: string;
   type: string;
@@ -238,8 +215,6 @@ export type ListQuery = {
   city: string | null;
   serviceId: string | null;
   sort: "newest" | "name" | "cases";
-  /** Restrict to customers who own at least one ACTIVE case owned by this
-   *  employee (C-15 "my customers"); omitted for the manager list. */
   ownerId?: string;
   skip: number;
   take: number;
@@ -251,9 +226,6 @@ function buildWhere(query: ListQuery): Prisma.CustomerWhereInput {
   if (query.status !== null) where.status = query.status;
   if (query.city) where.city = query.city;
 
-  // The service and owner filters both apply to ACTIVE cases only (C-3 / C-15):
-  // a customer matches if ANY of their active cases has the chosen owner or
-  // service. A customer with several active cases matches on any one of them.
   const activeCaseSome: Prisma.CaseWhereInput = {
     status: { in: [...ACTIVE_CASE_STATUSES] },
   };
@@ -283,8 +255,6 @@ function buildOrderBy(
     case "name":
       return [{ companyName: "asc" }, { fullName: "asc" }];
     case "cases":
-      // Orders by TOTAL case count (Prisma relation count). The row shows the
-      // ACTIVE-case count, which is computed separately.
       return { cases: { _count: "desc" } };
     case "newest":
     default:
@@ -310,7 +280,6 @@ export async function listCustomers(query: ListQuery): Promise<{
   return { rows, total };
 }
 
-/** Active-case count per customer for a page of rows (rule 2: computed, not stored). */
 export async function countActiveCasesByCustomer(
   ids: string[],
 ): Promise<Record<string, number>> {
@@ -325,7 +294,6 @@ export async function countActiveCasesByCustomer(
   return map;
 }
 
-/** Distinct non-empty cities, for the list's city filter dropdown. */
 export async function listCities(): Promise<string[]> {
   const rows = await prisma.customer.findMany({
     where: { city: { not: null } },
@@ -338,7 +306,6 @@ export async function listCities(): Promise<string[]> {
 
 // --- Per-customer extras for the list (C-3) ---------------------------------
 
-/** Active-case service names per customer (badge column). */
 export async function findActiveServiceNamesByCustomer(
   ids: string[],
 ): Promise<Record<string, string[]>> {
@@ -357,7 +324,6 @@ export async function findActiveServiceNamesByCustomer(
   return map;
 }
 
-/** The owner of each customer's most recent case (any status). */
 export async function findLatestOwnerByCustomer(
   ids: string[],
 ): Promise<Record<string, string>> {
@@ -374,7 +340,6 @@ export async function findLatestOwnerByCustomer(
   return map;
 }
 
-/** The most recent follow-up date per customer (across all their cases). */
 export async function findLatestFollowUpByCustomer(
   ids: string[],
 ): Promise<Record<string, Date>> {
@@ -393,19 +358,30 @@ export async function findLatestFollowUpByCustomer(
 
 // --- Stats for the customer list header (C-3) -------------------------------
 
-export async function countCustomers(): Promise<number> {
-  return prisma.customer.count();
+/** The base ownership filter for a customers query — customers related to the
+ *  given employee's cases (C-15). Omitted for the manager view. */
+function ownerFilter(ownerId?: string): Prisma.CustomerWhereInput {
+  if (!ownerId) return {};
+  return { cases: { some: { ownerId } } };
 }
 
-export async function countCustomersByStatus(status: boolean): Promise<number> {
-  return prisma.customer.count({ where: { status } });
+export async function countCustomers(ownerId?: string): Promise<number> {
+  return prisma.customer.count({ where: ownerFilter(ownerId) });
 }
 
-/**
- * Distinct customers who have at least one ACTIVE period expiring within the
- * given window (today .. today+days). Computed at read time (rule 2).
- */
-export async function countCustomersNearRenewal(days: number): Promise<number> {
+export async function countCustomersByStatus(
+  status: boolean,
+  ownerId?: string,
+): Promise<number> {
+  return prisma.customer.count({
+    where: { status, ...ownerFilter(ownerId) },
+  });
+}
+
+export async function countCustomersNearRenewal(
+  days: number,
+  ownerId?: string,
+): Promise<number> {
   const today = new Date();
   const until = new Date(today);
   until.setDate(until.getDate() + days);
@@ -413,6 +389,7 @@ export async function countCustomersNearRenewal(days: number): Promise<number> {
     where: {
       status: "ACTIVE",
       expiryDate: { not: null, gte: today, lte: until },
+      ...(ownerId ? { case: { ownerId } } : {}),
     },
     select: { case: { select: { customerId: true } } },
   });
@@ -422,7 +399,6 @@ export async function countCustomersNearRenewal(days: number): Promise<number> {
 
 // --- Filter dropdown options ------------------------------------------------
 
-/** All active services, for the list's service filter dropdown. */
 export async function listActiveServiceOptions(): Promise<
   { id: string; name: string }[]
 > {
@@ -433,7 +409,6 @@ export async function listActiveServiceOptions(): Promise<
   });
 }
 
-/** All active employees, for the list's employee filter dropdown. */
 export async function listActiveEmployeeOptions(): Promise<
   { id: string; fullName: string }[]
 > {
@@ -460,7 +435,6 @@ export type CaseWithDetail = {
   }[];
 };
 
-/** All of a customer's cases with the data needed to compute balance + progress. */
 export async function findCasesByCustomer(customerId: string): Promise<CaseWithDetail[]> {
   return prisma.case.findMany({
     where: { customerId },
@@ -496,7 +470,6 @@ export type FollowUpRow = {
   createdBy: { fullName: string };
 };
 
-/** The customer's follow-up timeline across all their cases, newest first. */
 export async function findFollowUpsByCustomer(customerId: string): Promise<FollowUpRow[]> {
   return prisma.followUp.findMany({
     where: { case: { customerId } },

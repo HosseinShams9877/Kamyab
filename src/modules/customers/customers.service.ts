@@ -34,18 +34,12 @@ import {
 import * as repo from "./customers.repository";
 import type { CustomerWriteData, CaseWithDetail } from "./customers.repository";
 
-// Business logic for the customers domain (C-3). The service is the module's
-// only cross-module entry point; the route boundary supplies the acting user.
-// Jalali<->Date conversion, display-name formatting, and the delete/deactivate
-// rules live here — the repository stays a thin DB layer.
-
 const PAGE_SIZE = 10;
 const CREATE_RETRIES = 5;
 const CASE_STATUS_DONE = ["DONE", "NOT_NEEDED"];
 
 type FieldError = { ok: false; field: string; message: string };
 
-/** Display name from a mobile-lookup row (its `type` is a raw string column). */
 function nameOf(row: {
   type: string;
   fullName: string | null;
@@ -60,29 +54,21 @@ function nameOf(row: {
   });
 }
 
-/** Trim an optional text value; empty/whitespace becomes null for storage. */
 function orNull(value: string | undefined | null): string | null {
   const v = (value ?? "").trim();
   return v ? v : null;
 }
 
-/** A normalized Jalali "YYYY/MM/DD" string (ASCII) to a Date at local midnight. */
 function jalaliToDate(value: string): Date | null {
   const j = parseJalali(value);
   return j ? toGregorianDate(j) : null;
 }
 
-/** A stored Date back to an ASCII Jalali "YYYY/MM/DD" string. */
 function dateToJalali(date: Date | null): string | null {
   if (!date) return null;
   return formatJalali(toJalali(date), { persianDigits: false });
 }
 
-/**
- * Reduce a validated form input to the columns to store: fields that do not
- * apply to the chosen type are nulled, optional text is trimmed to null, and the
- * two Jalali date strings are converted to Dates.
- */
 function toWriteData(
   input: CreateCustomerInput | UpdateCustomerInput,
 ): CustomerWriteData {
@@ -136,28 +122,27 @@ export async function listCityOptions(): Promise<string[]> {
   return repo.listCities();
 }
 
-/** The four headline numbers on top of the customer list (C-3). */
-export async function getCustomerStats(): Promise<CustomerStats> {
+/** The four headline numbers on top of the customer list (C-3).
+ *  When `ownerId` is given, the counts are scoped to customers related to that
+ *  employee's cases (C-15 employee panel). */
+export async function getCustomerStats(ownerId?: string): Promise<CustomerStats> {
   const [total, active, inactive, nearRenewal] = await Promise.all([
-    repo.countCustomers(),
-    repo.countCustomersByStatus(true),
-    repo.countCustomersByStatus(false),
-    repo.countCustomersNearRenewal(30),
+    repo.countCustomers(ownerId),
+    repo.countCustomersByStatus(true, ownerId),
+    repo.countCustomersByStatus(false, ownerId),
+    repo.countCustomersNearRenewal(30, ownerId),
   ]);
   return { total, active, nearRenewal, inactive };
 }
 
-/** Active services for the list's service filter dropdown. */
 export async function listServiceOptions(): Promise<ServiceFilterOption[]> {
   return repo.listActiveServiceOptions();
 }
 
-/** Active employees for the list's employee filter dropdown. */
 export async function listEmployeeOptions(): Promise<EmployeeFilterOption[]> {
   return repo.listActiveEmployeeOptions();
 }
 
-/** Paginated, filtered customer list (C-3). 25 rows per page, server-side. */
 export async function listCustomers(
   params: CustomerListParams,
 ): Promise<CustomerListResult> {
@@ -233,12 +218,6 @@ function targetsMobile(e: Prisma.PrismaClientKnownRequestError): boolean {
   return s.includes("mobile");
 }
 
-/**
- * Create a customer (C-3). Enforces mobile uniqueness with a name-carrying
- * Persian message, then creates inside a transaction that generates the
- * per-year code. A code-collision race is retried; a mobile-collision race is
- * mapped back to the field.
- */
 export async function createCustomer(
   input: CreateCustomerInput,
 ): Promise<{ ok: true; id: string } | FieldError> {
@@ -268,7 +247,7 @@ export async function createCustomer(
             message: buildMobileTakenMessage(owner ? nameOf(owner) : ""),
           };
         }
-        continue; // code collision — regenerate and retry
+        continue;
       }
       throw e;
     }
@@ -276,7 +255,6 @@ export async function createCustomer(
   return { ok: false, field: "code", message: "ثبت کد مشتری ناموفق بود. دوباره تلاش کنید." };
 }
 
-/** Update a customer (C-3). Mobile uniqueness is re-checked excluding this record. */
 export async function updateCustomer(
   id: string,
   input: UpdateCustomerInput,
@@ -310,10 +288,6 @@ export async function setCustomerStatus(id: string, status: boolean): Promise<vo
 
 // --- Engine seam (C-14 / Phase 15) ------------------------------------------
 
-/** Greeting-eligible customers with the applicable date reduced to Jalali parts
- *  (a NATURAL customer's birthDate, a LEGAL customer's foundingDate), for the
- *  engine's once-a-year greeting. The engine matches month+day against today; the
- *  BirthdayLog unique index guarantees at most one greeting per customer per year. */
 export async function listGreetingCandidates(): Promise<
   {
     customerId: string;
@@ -340,12 +314,10 @@ export async function listGreetingCandidates(): Promise<
 
 // --- Case-registration seams (C-4) -----------------------------------------
 
-/** True when the customer already has the birth/founding date its type needs. */
 function hasBirthInfo(row: repo.ActiveCustomerRow): boolean {
   return row.type === "NATURAL" ? row.birthDate !== null : row.foundingDate !== null;
 }
 
-/** Active customers for the case-form pick, filtered by an optional search term. */
 export async function listActiveCustomerOptions(
   q?: string,
 ): Promise<CustomerOption[]> {
@@ -366,13 +338,6 @@ export async function listActiveCustomerOptions(
   }));
 }
 
-/**
- * Save the birth/founding date and greeting flag the case form collected onto
- * the CUSTOMER (not the case — B-9: a customer with three services must not get
- * three greetings), on the cases module's save transaction (rule 4). A Jalali
- * date string is converted here; the date is only written when the customer
- * still lacks it, but the greeting flag is always applied.
- */
 export function saveCaseBirthInfoTx(
   tx: PrismaNS.TransactionClient,
   customerId: string,
@@ -389,11 +354,6 @@ export function saveCaseBirthInfoTx(
   return repo.saveBirthInfoTx(tx, customerId, patch);
 }
 
-/**
- * Delete a customer (C-3). Allowed ONLY when the customer has no case; otherwise
- * blocked with a Persian message stating the count (the UI must deactivate
- * instead). Never deletes a customer that owns cases.
- */
 export async function deleteCustomer(
   id: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -408,7 +368,6 @@ export async function deleteCustomer(
 // --- Customer page ---------------------------------------------------------
 
 function summarizeCase(c: CaseWithDetail): CustomerCaseSummary {
-  // The "current" period is the active one, else the most recent (index desc).
   const current =
     c.periods.find((p) => p.status === "ACTIVE") ?? c.periods[0] ?? null;
 
@@ -424,8 +383,6 @@ function summarizeCase(c: CaseWithDetail): CustomerCaseSummary {
     currentStageTitle = open ? open.title : null;
   }
 
-  // Balance across ALL periods: sum(totals) - sum(payments). null when no period
-  // has a total (the UI shows "—", never zero).
   let anyTotal = false;
   let totalSum = 0;
   let paidSum = 0;
@@ -449,7 +406,6 @@ function summarizeCase(c: CaseWithDetail): CustomerCaseSummary {
   };
 }
 
-/** Everything the customer page needs beyond the top card (C-3). */
 export async function getCustomerPageData(id: string): Promise<CustomerPageData> {
   const [cases, followUps] = await Promise.all([
     repo.findCasesByCustomer(id),
@@ -458,7 +414,6 @@ export async function getCustomerPageData(id: string): Promise<CustomerPageData>
 
   const summaries = cases.map(summarizeCase);
 
-  // Grand total balance across all cases; null only when NO case has any total.
   let anyBalance = false;
   let totalBalance = 0;
   for (const s of summaries) {
