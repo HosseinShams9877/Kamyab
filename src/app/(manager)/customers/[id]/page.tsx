@@ -49,7 +49,7 @@ export default async function CustomerDetailPage({
   const dateValue = isNatural ? customer.birthDate : customer.foundingDate;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10">
+    <main className="mx-auto w-full px-4 py-10">
       <div className="mb-6">
         <Link
           href={user.role === "EMPLOYEE" ? "/employee/customers" : "/customers"}

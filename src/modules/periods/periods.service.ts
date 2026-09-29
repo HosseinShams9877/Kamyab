@@ -315,13 +315,12 @@ function toRenewalRow(
 
 /** The four headline stats above the renewals table (C-10). When `ownerId` is
  *  given, the counts are scoped to that employee's cases (C-15 employee panel). */
+
 export async function getRenewalStats(ownerId?: string): Promise<RenewalStats> {
   const rows = await repo.findRenewalsQueue();
   const now = new Date();
   let expired = 0;
   let within7 = 0;
-  let within30 = 0;
-  let beyond30 = 0;
   for (const r of rows) {
     if (r.status !== "ACTIVE") continue;
     if (ownerId && r.case.ownerId !== ownerId) continue;
@@ -329,10 +328,8 @@ export async function getRenewalStats(ownerId?: string): Promise<RenewalStats> {
     if (d === null) continue;
     if (d < 0) expired += 1;
     else if (d <= 7) within7 += 1;
-    else if (d <= 30) within30 += 1;
-    else beyond30 += 1;
   }
-  return { expired, within7, within30, beyond30 };
+  return { expired, within7 };
 }
 
 export async function getRenewalDashboard(

@@ -12,7 +12,7 @@ export default async function NewCustomerPage() {
   if (!can(user, "customers.create")) redirect(customersHome);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto w-full px-4 py-10">
       <div className="mb-6">
         <Link href={customersHome} className="text-sm text-primary hover:underline">
           ← بازگشت به فهرست مشتریان

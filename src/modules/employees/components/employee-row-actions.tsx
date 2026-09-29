@@ -5,18 +5,26 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 // Row actions for the employees list (C-12): open the profile editor or the
-// permission matrix; quick activate/deactivate.
+// permission matrix; quick activate/deactivate. The `basePath` prop decides
+// whether links resolve against /employees (manager shell) or /employee/employees
+// (employee shell).
 
 type Props = {
   id: string;
   status: boolean;
   canEdit: boolean;
+  basePath?: string;
 };
 
 const btn =
   "inline-flex min-h-[32px] items-center rounded-control border border-border px-3 text-xs text-text hover:bg-page disabled:opacity-50";
 
-export function EmployeeRowActions({ id, status, canEdit }: Props) {
+export function EmployeeRowActions({
+  id,
+  status,
+  canEdit,
+  basePath = "/employees",
+}: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -36,10 +44,10 @@ export function EmployeeRowActions({ id, status, canEdit }: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <Link href={`/employees/${id}`} className={btn}>
+      <Link href={`${basePath}/${id}`} className={btn}>
         ویرایش
       </Link>
-      <Link href={`/employees/${id}?tab=permissions`} className={btn}>
+      <Link href={`${basePath}/${id}?tab=permissions`} className={btn}>
         دسترسی‌ها
       </Link>
       {canEdit && (

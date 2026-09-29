@@ -17,12 +17,8 @@ export default async function EmployeeLayout({
   const user = await requireUser();
   if (user.role !== "EMPLOYEE") redirect("/dashboard");
 
-  // The employee panel is the manager pages with an owner-scoped filter (C-15):
-  // each list lives under /employee/* so it does not collide with the manager
-  // group's top-level routes. Every link is still permission-gated — an employee
-  // whose defaults were trimmed does not see a section they cannot open. Detail
-  // pages are the shared /cases/[id] and /customers/[id], which guard by
-  // ownership, so no per-item route is duplicated here.
+  // Each link is permission-gated — an employee whose defaults were trimmed
+  // (or widened) sees exactly the sections they can open.
   const navItems: NavItem[] = [
     { href: "/employee", label: "داشبورد" },
     can(user, "customers.view") && { href: "/employee/customers", label: "مشتریان" },
@@ -35,6 +31,9 @@ export default async function EmployeeLayout({
       label: "کارها",
     },
     can(user, "renewals.view") && { href: "/employee/renewals", label: "تمدیدها" },
+    can(user, "services.view") && { href: "/employee/services", label: "خدمات" },
+    can(user, "employees.view") && { href: "/employee/employees", label: "کارمندان" },
+    can(user, "reports.view") && { href: "/employee/reports", label: "گزارش‌ها" },
   ].filter(Boolean) as NavItem[];
 
   const unreadCount = await countMyUnread(user.id);

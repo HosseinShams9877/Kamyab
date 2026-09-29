@@ -134,8 +134,7 @@ export type RenewalRow = {
 export type RenewalStats = {
   expired: number;
   within7: number;
-  within30: number;
-  beyond30: number;
+ 
 };
 
 /** Filter params the renewals page accepts (all optional). */

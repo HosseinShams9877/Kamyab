@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/modules/auth";
 import { can } from "@/modules/permissions";
@@ -10,14 +9,15 @@ import {
 } from "@/modules/employees";
 import { toPersianDigits } from "@/lib/digits";
 
-// Employees list (C-12): four headline stat cards + one card holding the table.
-// The create button links to a dedicated page (/employees/new).
+// Employee "employees" list (C-15): read-only view of the team. An employee
+// with employees.view can see everyone, but the "edit / permissions /
+// deactivate" controls only show when the matching per-employee permission is
+// held (usually only a manager does). The API re-checks each request.
 export const dynamic = "force-dynamic";
 
-export default async function EmployeesPage() {
+export default async function EmployeeEmployeesPage() {
   const user = await requireUser();
-  if (user.role === "EMPLOYEE") redirect("/employee");
-  if (!can(user, "employees.view")) redirect("/dashboard");
+  if (!can(user, "employees.view")) redirect("/employee");
 
   const mayCreate = can(user, "employees.create");
   const mayEdit = can(user, "employees.edit");
@@ -47,14 +47,6 @@ export default async function EmployeesPage() {
             کاربران عملیاتی سامانه و سطح دسترسی هرکدام
           </p>
         </div>
-        {mayCreate && (
-          <Link
-            href="/employees/new"
-            className="inline-flex min-h-[44px] items-center rounded-control bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:min-h-0 sm:py-2"
-          >
-            + افزودن کارمند
-          </Link>
-        )}
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -110,7 +102,7 @@ export default async function EmployeesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <EmployeeRowActions id={e.id} status={e.status} canEdit={mayEdit} basePath="/employees" />
+                    <EmployeeRowActions id={e.id} status={e.status} canEdit={mayEdit} basePath="/employee/employees" />
                   </td>
                 </tr>
               ))}

@@ -74,8 +74,6 @@ export default async function RenewalsPage({
   const statCards: { key: string; label: string; value: number; tone: string }[] = [
     { key: "expired", label: "منقضی‌شده", value: stats.expired, tone: "text-error" },
     { key: "within7", label: "تا ۷ روز آینده", value: stats.within7, tone: "text-warning" },
-    { key: "within30", label: "تا ۳۰ روز آینده", value: stats.within30, tone: "text-info" },
-    { key: "beyond30", label: "بیش از ۳۰ روز", value: stats.beyond30, tone: "text-text" },
   ];
 
   return (
@@ -87,9 +85,12 @@ export default async function RenewalsPage({
         </p>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4">
         {statCards.map((s) => (
-          <div key={s.key} className="rounded-card border border-border bg-card p-5 shadow-card">
+          <div
+            key={s.key}
+            className="rounded-card border border-border bg-card p-5 shadow-card"
+          >
             <div className="text-sm text-text-secondary">{s.label}</div>
             <div className={`mt-2 text-2xl font-bold ${s.tone}`}>
               {toPersianDigits(String(s.value))}
