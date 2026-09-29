@@ -159,3 +159,25 @@ export const caseRestoreSchema = z.object({
 });
 
 export type CaseRestoreInput = z.infer<typeof caseRestoreSchema>;
+
+// --- Change owner (C-5 header action) --------------------------------------
+// Isomorphic: the owner-change dialog and its API route validate the same
+// object, so a hand-crafted request cannot skip a rule the dialog enforces
+// (rule 3). Whether the new owner is active and different from the current
+// one is a business rule the service owns.
+
+/** Reassign a case to another active employee. `moveOpenTasks` controls whether
+ *  the case's OPEN tasks travel with it (the dialog defaults it to true). */
+export const caseChangeOwnerSchema = z.object({
+  caseId: requiredId("شناسهٔ پرونده الزامی است."),
+  newOwnerId: requiredId("انتخاب مسئول جدید الزامی است."),
+  moveOpenTasks: z.boolean(),
+  note: z
+    .string()
+    .trim()
+    .max(500, { message: "حداکثر ۵۰۰ نویسه مجاز است." })
+    .optional()
+    .or(z.literal("")),
+});
+
+export type CaseChangeOwnerInput = z.infer<typeof caseChangeOwnerSchema>;

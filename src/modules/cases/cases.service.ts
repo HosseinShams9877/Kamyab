@@ -56,6 +56,7 @@ import type {
   AddStageInput,
   CaseCancelInput,
   CaseRestoreInput,
+  CaseChangeOwnerInput,
 } from "./cases.schema";
 import {
   CUSTOMER_INVALID,
@@ -78,6 +79,10 @@ import {
   CANNOT_CANCEL_COMPLETED,
   NOT_CANCELLED,
   CANCEL_REASON_INVALID,
+  CHANGE_OWNER_FORBIDDEN,
+  NEW_OWNER_INVALID,
+  SAME_OWNER,
+  CASE_NOT_CHANGEABLE,
   aggregateCancellations,
   isStageActionAllowed,
   stageHasRecordedAction,
@@ -95,6 +100,8 @@ import type {
   CaseStats,
   ServiceFilterOption,
   OwnerFilterOption,
+  OwnerChangeMeta,
+  ChangeOwnerResult,
 } from "./cases.types";
 import { toEnglishDigits } from "@/lib/digits";
 
@@ -1035,4 +1042,96 @@ export async function getCancellationReport(
   const to = new Date(toGregorianDate(toJ).getTime() + DAY_MS);
   const rows = await repo.findCancellationsInRange(from, to);
   return aggregateCancellations(rows);
+}
+
+// --- Change owner (C-5 header action) ---------------------------------------
+
+export function canChangeOwner(user: Authorizable, ownerId: string): boolean {
+  return (
+    can(user, "cases.assign_owner") &&
+    can(user, "cases.edit", { ownerId })
+  );
+}
+
+/** The dialog meta: current owner + active candidates (current owner excluded)
+ *  + the number of OPEN tasks that would travel with the case. */
+export async function getOwnerChangeMeta(
+  caseId: string,
+): Promise<OwnerChangeMeta | null> {
+  const kase = await repo.findCaseForOwnerChange(caseId);
+  if (!kase) return null;
+
+  const [candidates, openTasks] = await Promise.all([
+    listOwnerFilterOptions(), // already returns active employees
+    repo.countOpenTasksForCase(caseId),
+  ]);
+
+  return {
+    currentOwnerId: kase.ownerId,
+    candidates: candidates.filter((c) => c.id !== kase.ownerId),
+    openTasks,
+  };
+}
+
+/** Reassign a case to another active employee, optionally moving its OPEN
+ *  tasks along. Everything happens in one transaction (rule 4):
+ *    1. the injected write (case.ownerId + optional task reassignment +
+ *       the owner-change notification),
+ *    2. Case.lastActivityAt bump,
+ *    3. an ActivityHistory row (`case.owner_changed`).
+ *  A cancelled case is rejected: its path is frozen. */
+export async function changeCaseOwner(
+  user: Authorizable,
+  input: CaseChangeOwnerInput,
+): Promise<ChangeOwnerResult> {
+  const kase = await repo.findCaseForOwnerChange(input.caseId);
+  if (!kase) return { ok: false, code: 404, message: CASE_NOT_FOUND };
+
+  if (!canChangeOwner(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: CHANGE_OWNER_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: CASE_NOT_CHANGEABLE };
+  }
+  if (input.newOwnerId === kase.ownerId) {
+    return { ok: false, code: 409, message: SAME_OWNER };
+  }
+  if (!(await repo.ownerIsActive(input.newOwnerId))) {
+    return { ok: false, code: 422, message: NEW_OWNER_INVALID };
+  }
+
+  const note = input.note && input.note.trim() ? input.note.trim() : null;
+  const message = `پروندهٔ ${kase.number} به شما ارجاع شد.`;
+
+  let movedTasks = 0;
+  await repo.caseMutationTx({
+    caseId: input.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: async (tx) => {
+      await repo.setCaseOwnerTx(tx, {
+        caseId: input.caseId,
+        newOwnerId: input.newOwnerId,
+      });
+      if (input.moveOpenTasks) {
+        movedTasks = await repo.moveOpenCaseTasksTx(tx, {
+          caseId: input.caseId,
+          newOwnerId: input.newOwnerId,
+        });
+      }
+      await repo.notifyOwnerChangeTx(tx, {
+        userId: input.newOwnerId,
+        message,
+      });
+    },
+    historyAction: "case.owner_changed",
+    historyDetail: JSON.stringify({
+      fromOwnerId: kase.ownerId,
+      toOwnerId: input.newOwnerId,
+      movedTasks,
+      ...(note ? { note } : {}),
+    }),
+  });
+
+  return { ok: true, movedTasks };
 }

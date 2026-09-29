@@ -47,6 +47,12 @@ export const CANNOT_CANCEL_COMPLETED = "پروندهٔ تکمیل‌شده قا�
 export const NOT_CANCELLED = "این پرونده لغو نشده است.";
 export const CANCEL_REASON_INVALID = "دلیل لغو انتخاب‌شده معتبر نیست.";
 
+// --- Change owner messages (C-5 header action) ------------------------------
+export const CHANGE_OWNER_FORBIDDEN = "شما مجاز به تغییر مسئول این پرونده نیستید.";
+export const NEW_OWNER_INVALID = "مسئول جدید انتخاب‌شده معتبر نیست.";
+export const SAME_OWNER = "مسئول جدید با مسئول فعلی یکسان است.";
+export const CASE_NOT_CHANGEABLE = "پروندهٔ لغوشده قابل تغییر مسئول نیست.";
+
 // --- Cancellation report (C-8 / B-5) ----------------------------------------
 // Pure aggregation of a date-range's cancelled cases into per-reason counts,
 // shared shape for the report page. Kept here (isomorphic leaf) so it is unit-

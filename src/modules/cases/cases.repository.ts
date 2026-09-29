@@ -423,3 +423,64 @@ export async function findCancellationsInRange(
     reasonTitle: r.cancellationReason?.title ?? null,
   }));
 }
+
+// --- Change owner (C-5 header action) ---------------------------------------
+// Raw Case-row writes + the Task reassignment, both tx-aware. The service runs
+// them inside caseMutationTx's `apply` so the lastActivityAt bump and the
+// ActivityHistory row happen in the same transaction (rule 4).
+
+/** The fields an owner-change needs: current ownership + status (the cancelled
+ *  block) + the display number for the notification. Null when absent. */
+export async function findCaseForOwnerChange(caseId: string): Promise<{
+  id: string;
+  number: string;
+  status: string;
+  ownerId: string;
+} | null> {
+  return prisma.case.findUnique({
+    where: { id: caseId },
+    select: { id: true, number: true, status: true, ownerId: true },
+  });
+}
+
+/** Count OPEN (non-archived) tasks attached to a case, for the dialog hint. */
+export function countOpenTasksForCase(caseId: string): Promise<number> {
+  return prisma.task.count({
+    where: { caseId, status: "OPEN", archivedAt: null },
+  });
+}
+
+/** Swap the case's owner. Tx-aware (runs inside caseMutationTx's `apply`). */
+export function setCaseOwnerTx(
+  tx: Prisma.TransactionClient,
+  args: { caseId: string; newOwnerId: string },
+): Promise<unknown> {
+  return tx.case.update({
+    where: { id: args.caseId },
+    data: { ownerId: args.newOwnerId },
+  });
+}
+
+/** Move every OPEN task of a case to a new owner. Tx-aware. Returns the count
+ *  actually moved (idempotent-safe: re-running after a partial move just moves
+ *  whatever is left). */
+export async function moveOpenCaseTasksTx(
+  tx: Prisma.TransactionClient,
+  args: { caseId: string; newOwnerId: string },
+): Promise<number> {
+  const res = await tx.task.updateMany({
+    where: { caseId: args.caseId, status: "OPEN" },
+    data: { ownerId: args.newOwnerId },
+  });
+  return res.count;
+}
+
+/** Write the owner-change notification inside the caller's tx. */
+export function notifyOwnerChangeTx(
+  tx: Prisma.TransactionClient,
+  args: { userId: string; message: string },
+): Promise<unknown> {
+  return tx.notification.create({
+    data: { userId: args.userId, message: args.message },
+  });
+}

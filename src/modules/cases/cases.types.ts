@@ -109,3 +109,20 @@ export type ServiceFilterOption = { id: string; name: string };
 
 /** An employee pick-list entry for the list's owner filter. */
 export type OwnerFilterOption = { id: string; fullName: string };
+
+// --- Change owner (C-5 header action) --------------------------------------
+
+/** Meta the owner-change dialog needs: the current owner plus the list of
+ *  active employees the case can be reassigned to (the current owner excluded). */
+export type OwnerChangeMeta = {
+  currentOwnerId: string;
+  candidates: OwnerOption[];
+  /** Number of OPEN tasks attached to the case (for the dialog's hint). */
+  openTasks: number;
+};
+
+/** The outcome of a change-owner attempt. `movedTasks` is present only when the
+ *  operation succeeded (the count of tasks reassigned along with the case). */
+export type ChangeOwnerResult =
+  | { ok: true; movedTasks: number }
+  | { ok: false; code: 403 | 404 | 409 | 422; message: string };

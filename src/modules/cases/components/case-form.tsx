@@ -23,6 +23,10 @@ import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
 //
 // The four pick fields (customer, service, owner, duration) use the shared
 // SearchableSelect; the three date fields use the shared JalaliDatePicker.
+//
+// `basePath` decides where the user lands after a successful save: the manager
+// form uses the default /cases, the employee form passes /employee/cases so
+// navigation stays inside the employee shell.
 
 type FormValues = {
   customerId: string;
@@ -50,7 +54,13 @@ function previewExpiry(start: string, monthCount: number): string | null {
   return formatJalali(addMonths(j, monthCount), { persianDigits: true });
 }
 
-export function CaseForm({ data }: { data: CaseFormData }) {
+export function CaseForm({
+  data,
+  basePath = "/cases",
+}: {
+  data: CaseFormData;
+  basePath?: string;
+}) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
   const [meta, setMeta] = useState<ServiceCaseMeta | null>(null);
@@ -150,7 +160,7 @@ export function CaseForm({ data }: { data: CaseFormData }) {
         message?: string;
       };
       if (res.ok && body.ok && body.id) {
-        router.push(`/cases/${body.id}`);
+        router.push(`${basePath}/${body.id}`);
         router.refresh();
         return;
       }

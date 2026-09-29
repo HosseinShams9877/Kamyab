@@ -40,6 +40,9 @@ export {
   getCaseStats,
   listServiceFilterOptions,
   listOwnerFilterOptions,
+  canChangeOwner,
+  getOwnerChangeMeta,
+  changeCaseOwner,
 } from "./cases.service";
 export type { CasePage, CaseMutationArgs } from "./cases.service";
 
@@ -51,6 +54,7 @@ export {
   stageStructuralSchema,
   caseCancelSchema,
   caseRestoreSchema,
+  caseChangeOwnerSchema,
 } from "./cases.schema";
 export type {
   CaseCreateInput,
@@ -59,6 +63,7 @@ export type {
   StageStructuralInput,
   CaseCancelInput,
   CaseRestoreInput,
+  CaseChangeOwnerInput,
 } from "./cases.schema";
 
 // --- Types (isomorphic) -----------------------------------------------------
@@ -76,6 +81,8 @@ export type {
   CaseStats,
   ServiceFilterOption,
   OwnerFilterOption,
+  OwnerChangeMeta,
+  ChangeOwnerResult,
 } from "./cases.types";
 
 // --- Guards (isomorphic: error + Persian messages + read-time helpers) ------
@@ -87,6 +94,7 @@ export { CaseForm } from "./components/case-form";
 export { CaseTabs } from "./components/case-tabs";
 export { CaseCancelDialog } from "./components/case-cancel-dialog";
 export { CaseRestoreButton } from "./components/case-restore-button";
+export { CaseChangeOwnerDialog } from "./components/case-change-owner-dialog";
 export { CasesTable } from "./components/cases-table";
 
 // --- Presentation labels (isomorphic) ---------------------------------------

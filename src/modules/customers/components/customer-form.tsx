@@ -15,10 +15,14 @@ import type { CustomerDetail } from "@/modules/customers/customers.types";
 // Create / edit a customer (C-3). The first choice is the type, and the rest of
 // the form changes with it. The SAME Zod schema validates here and on the
 // server, so the browser gives fast feedback while the API stays the real gate.
+//
+// `basePath` decides where the user lands after a successful save: the manager
+// form uses the default /customers, the employee form passes
+// /employee/customers so navigation stays inside the employee shell.
 
 type Props =
-  | { mode: "create" }
-  | { mode: "edit"; customer: CustomerDetail };
+  | { mode: "create"; basePath?: string }
+  | { mode: "edit"; customer: CustomerDetail; basePath?: string };
 
 type FormValues = {
   type: "NATURAL" | "LEGAL";
@@ -64,6 +68,7 @@ function initialValues(props: Props): FormValues {
 
 export function CustomerForm(props: Props) {
   const router = useRouter();
+  const basePath = props.basePath ?? "/customers";
   const [formError, setFormError] = useState<string | null>(null);
   const schema = props.mode === "create" ? createCustomerSchema : updateCustomerSchema;
 
@@ -105,7 +110,7 @@ export function CustomerForm(props: Props) {
       };
       if (res.ok && data.ok) {
         const id = props.mode === "create" ? data.id! : props.customer.id;
-        router.push(`/customers/${id}`);
+        router.push(`${basePath}/${id}`);
         router.refresh();
         return;
       }

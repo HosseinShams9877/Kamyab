@@ -43,18 +43,19 @@ import {
   FollowUpTimeline,
 } from "@/modules/followups";
 
-// Manager case detail page (C-5). Access is gated by the same rules as the
-// employee page: a user without cases.view_all may open only a case they own;
-// every per-action capability is scoped to header.ownerId and the API routes
-// re-check on each request.
-export default async function ManagerCaseDetailPage({
+// Employee case detail page (C-15): a copy of the manager /cases/[id] page that
+// lives under /employee so navigation stays inside the employee shell. Access
+// is gated by the same rules: an employee without cases.view_all may open only
+// a case they own; every per-action capability is scoped to header.ownerId and
+// the API routes re-check on each request.
+export default async function EmployeeCaseDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
   if (!can(user, "cases.view_all") && !can(user, "cases.view_own")) {
-    redirect("/cases");
+    redirect("/employee");
   }
 
   const { id } = await params;
@@ -64,7 +65,7 @@ export default async function ManagerCaseDetailPage({
   const { header, periods, current } = page;
 
   if (!can(user, "cases.view_all") && header.ownerId !== user.id) {
-    redirect("/cases");
+    redirect("/employee");
   }
 
   const canEdit = canEditStages(user, header.ownerId);
@@ -148,7 +149,7 @@ export default async function ManagerCaseDetailPage({
     <main className="mx-auto w-full px-4 py-10">
       <div className="mb-6">
         <Link
-          href="/cases"
+          href="/employee/cases"
           className="text-sm text-primary hover:underline"
         >
           ← بازگشت به پرونده‌ها
@@ -172,7 +173,7 @@ export default async function ManagerCaseDetailPage({
             <dt className="text-sm text-text-secondary">مشتری</dt>
             <dd className="mt-0.5">
               <Link
-                href={`/customers/${header.customerId}`}
+                href={`/employee/customers/${header.customerId}`}
                 className="text-text hover:text-primary hover:underline"
               >
                 {header.customerName}
