@@ -12,8 +12,8 @@ import type {
 
 export const TASK_PRIORITY_LABELS: Record<TaskPriorityKey, string> = {
   NORMAL: "عادی",
-  HIGH: "زیاد",
-  URGENT: "فوری",
+  HIGH: "متوسط",
+  URGENT: "زیاد",
 };
 
 export const TASK_PRIORITY_BADGE: Record<TaskPriorityKey, string> = {
