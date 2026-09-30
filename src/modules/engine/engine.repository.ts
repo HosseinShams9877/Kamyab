@@ -6,6 +6,7 @@ import type {
   GreetingIntent,
   QueuedSms,
   ReminderIntent,
+  SmsLogRow,
 } from "./engine.types";
 
 // ALL engine-OWNED Prisma access lives here: the tables the engine writes to
@@ -202,4 +203,47 @@ export function listRecentRuns(limit: number): Promise<RunLogRow[]> {
       detail: true,
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// SMS log (C-14) — direct reads of the SmsMessage queue for the engine page.
+// ---------------------------------------------------------------------------
+
+/** Counts grouped by SMS status (QUEUED / SENT / FAILED). */
+export async function countSmsByStatus(): Promise<Record<string, number>> {
+  const groups = await prisma.smsMessage.groupBy({
+    by: ["status"],
+    _count: { _all: true },
+  });
+  const out: Record<string, number> = {};
+  for (const g of groups) out[g.status] = g._count._all;
+  return out;
+}
+
+/** Most recent SMS messages of any status, newest first. */
+export async function listRecentSmsMessages(limit = 30): Promise<SmsLogRow[]> {
+  const rows = await prisma.smsMessage.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      recipient: true,
+      body: true,
+      templateKey: true,
+      status: true,
+      error: true,
+      createdAt: true,
+      sentAt: true,
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    recipient: r.recipient,
+    body: r.body,
+    templateKey: r.templateKey,
+    status: r.status as "QUEUED" | "SENT" | "FAILED",
+    error: r.error,
+    createdAt: r.createdAt,
+    sentAt: r.sentAt,
+  }));
 }

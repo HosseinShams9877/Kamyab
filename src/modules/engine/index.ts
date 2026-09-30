@@ -2,12 +2,16 @@
 // module DAG: it reads downward through the periods/tasks/customers/employees/
 // settings barrels, and NOTHING imports it back (importing this would risk a
 // cycle). The two triggers — POST /api/engine/run and the CLI scripts/engine.ts —
-// import `runEngine` from here; the /engine page imports `listRecentRuns`.
+// import `runEngine` from here; the /engine page imports `listRecentRuns` and
+// (for the SMS log) `getSmsLog`.
 //
 // The pure orchestrator (engine.orchestrator), the decision guards (engine.guards)
 // and the port contract (engine.types) are deliberately NOT re-exported: they are
 // internal, and the twice-run proof drives them directly via relative imports in
 // __tests__, so nothing outside the module ever needs them.
 
-export { runEngine, listRecentRuns } from "./engine.service";
+export { runEngine, listRecentRuns, getSmsLog } from "./engine.service";
 export type { EngineRunView } from "./engine.service";
+export { RunEngineButton } from "./components/run-engine-button";
+export { SmsLogPanel } from "./components/sms-log-panel";
+export type { SmsLogRow, SmsLogView } from "./engine.types";

@@ -10,7 +10,12 @@ import * as settings from "@/modules/settings";
 
 import { executeEngine } from "./engine.orchestrator";
 import * as repo from "./engine.repository";
-import type { EngineConfig, EnginePorts, EngineRunResult } from "./engine.types";
+import type {
+  EngineConfig,
+  EnginePorts,
+  EngineRunResult,
+  SmsLogView,
+} from "./engine.types";
 
 // Production wiring for the automatic engine (C-14). This is the ONLY file that
 // stitches the pure orchestrator (executeEngine) to the real world: it reads the
@@ -175,4 +180,22 @@ function toRunView(row: repo.RunLogRow): EngineRunView {
 export async function listRecentRuns(limit = 50): Promise<EngineRunView[]> {
   const rows = await repo.listRecentRuns(limit);
   return rows.map(toRunView);
+}
+
+// ---------------------------------------------------------------------------
+// SMS log (C-14) — counts + recent rows, for the /engine page.
+// ---------------------------------------------------------------------------
+
+/** The SMS log view: counts by status + recent rows, for the engine page. */
+export async function getSmsLog(): Promise<SmsLogView> {
+  const [counts, rows] = await Promise.all([
+    repo.countSmsByStatus(),
+    repo.listRecentSmsMessages(),
+  ]);
+  return {
+    sent: counts.SENT ?? 0,
+    queued: counts.QUEUED ?? 0,
+    failed: counts.FAILED ?? 0,
+    rows,
+  };
 }

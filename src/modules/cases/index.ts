@@ -96,6 +96,6 @@ export { CaseCancelDialog } from "./components/case-cancel-dialog";
 export { CaseRestoreButton } from "./components/case-restore-button";
 export { CaseChangeOwnerDialog } from "./components/case-change-owner-dialog";
 export { CasesTable } from "./components/cases-table";
-
+export { CancellationReportForm } from "./components/cancellation-report-form";
 // --- Presentation labels (isomorphic) ---------------------------------------
 export { CASE_STATUS_LABELS, CASE_STATUS_BADGE, stageCountHint } from "./lib/labels";

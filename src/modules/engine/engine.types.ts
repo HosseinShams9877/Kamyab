@@ -152,3 +152,29 @@ export interface EnginePorts {
   // Persist the run's tallies.
   writeRunLog(result: EngineRunResult): Promise<void>;
 }
+
+// ---------------------------------------------------------------------------
+// SMS log (C-14): a read-only view of the most recent SmsMessage rows, so a
+// manager can see WHY a run's messages failed without leaving the engine page.
+// Kept inside the engine module (no cross-module dependency on settings).
+// ---------------------------------------------------------------------------
+
+/** One recent SMS message of any status, as shown in the engine page's log. */
+export type SmsLogRow = {
+  id: string;
+  recipient: string;
+  body: string;
+  templateKey: string;
+  status: "QUEUED" | "SENT" | "FAILED";
+  error: string | null;
+  createdAt: Date;
+  sentAt: Date | null;
+};
+
+/** The full SMS log view: per-status counts + the recent rows. */
+export type SmsLogView = {
+  sent: number;
+  queued: number;
+  failed: number;
+  rows: SmsLogRow[];
+};

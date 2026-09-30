@@ -2,22 +2,16 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/modules/auth";
 import { can } from "@/modules/permissions";
 import { getCancellationReport } from "@/modules/cases";
+import { CancellationReportForm } from "@/modules/cases/components/cancellation-report-form";
 import { todayJalali, formatJalali, parseJalali } from "@/lib/jalali";
 import { toPersianDigits, toEnglishDigits } from "@/lib/digits";
 
 // The cancellation report (B-5 / C-8): within a chosen Jalali date range, the
-// count of cancelled cases broken down by reason. Server component — it authorizes
-// (rule 3, `reports.view`), reads the range from query params (a plain GET form,
-// no client JS), and reads the aggregate through the cases service (which owns the
-// pure per-reason tally). Dynamic: the range is a query param and "today" drives
-// the default range.
+// count of cancelled cases broken down by reason. Server component — it
+// authorizes (rule 3, `reports.view`), reads the range from query params, and
+// reads the aggregate through the cases service (which owns the pure per-reason
+// tally). Dynamic: the range is a query param and "today" drives the default.
 export const dynamic = "force-dynamic";
-
-const field =
-  "min-h-[44px] w-full rounded-control border border-border bg-card px-3 text-sm text-text placeholder:text-text-secondary";
-const label = "mb-1 block text-xs text-text-secondary";
-const primaryBtn =
-  "min-h-[44px] rounded-control bg-primary px-4 text-sm text-white hover:bg-primary-hover";
 
 export default async function ReportsPage({
   searchParams,
@@ -31,7 +25,10 @@ export default async function ReportsPage({
   const { from: fromParam, to: toParam } = await searchParams;
   const today = todayJalali();
   const defaultTo = formatJalali(today, { persianDigits: false });
-  const defaultFrom = formatJalali({ jy: today.jy, jm: today.jm, jd: 1 }, { persianDigits: false });
+  const defaultFrom = formatJalali(
+    { jy: today.jy, jm: today.jm, jd: 1 },
+    { persianDigits: false },
+  );
 
   const fromRaw = toEnglishDigits((fromParam ?? "").trim());
   const toRaw = toEnglishDigits((toParam ?? "").trim());
@@ -40,48 +37,11 @@ export default async function ReportsPage({
 
   const report = await getCancellationReport(from, to);
 
-  // REPORT_BODY
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
+    <main className="mx-auto w-full px-4 py-10">
       <h1 className="mb-6 text-2xl font-bold text-text">گزارش لغو پرونده‌ها</h1>
 
-      {/* Jalali date-range filter: a plain GET form, no client JS. */}
-      <form
-        method="get"
-        className="mb-6 flex flex-wrap items-end gap-3 rounded-card border border-border bg-card p-4 shadow-card"
-      >
-        <div className="min-w-[9rem] flex-1">
-          <label className={label} htmlFor="from">
-            از تاریخ
-          </label>
-          <input
-            id="from"
-            name="from"
-            className={field}
-            defaultValue={toPersianDigits(from)}
-            dir="ltr"
-            inputMode="numeric"
-            placeholder="۱۴۰۴/۰۱/۰۱"
-          />
-        </div>
-        <div className="min-w-[9rem] flex-1">
-          <label className={label} htmlFor="to">
-            تا تاریخ
-          </label>
-          <input
-            id="to"
-            name="to"
-            className={field}
-            defaultValue={toPersianDigits(to)}
-            dir="ltr"
-            inputMode="numeric"
-            placeholder="۱۴۰۴/۱۲/۲۹"
-          />
-        </div>
-        <button type="submit" className={primaryBtn}>
-          اعمال
-        </button>
-      </form>
+      <CancellationReportForm defaultFrom={from} defaultTo={to} />
 
       <section className="rounded-card border border-border bg-card p-6 shadow-card">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -96,7 +56,10 @@ export default async function ReportsPage({
         {report && report.byReason.length > 0 ? (
           <ul className="divide-y divide-border">
             {report.byReason.map((r) => (
-              <li key={r.title} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <li
+                key={r.title}
+                className="flex items-center justify-between gap-3 py-2 text-sm"
+              >
                 <span className="text-text break-words">{r.title}</span>
                 <span className="text-text-secondary" dir="ltr">
                   {toPersianDigits(String(r.count))}
