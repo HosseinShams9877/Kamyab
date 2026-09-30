@@ -89,24 +89,28 @@ export default async function ManagerCaseDetailPage({
     : null;
 
   const paymentsPanel = canViewFin ? (
-    financial && (
-      <FinancialPanel
-        payments={financial.payments}
-        methods={financial.methods}
-        periods={financial.periods}
-        defaultPeriodId={current?.id ?? null}
-        canRecord={canRecordPay}
-        canAdjust={canAdjustTot}
-      />
-    )
-  ) : (
-    <div className="rounded-card border border-border bg-card p-8 text-center text-sm text-text-secondary shadow-card">
-      شما مجاز به مشاهدهٔ اطلاعات مالی این پرونده نیستید.
-    </div>
-  );
+  financial && (
+    <FinancialPanel
+      key="payments"
+      payments={financial.payments}
+      methods={financial.methods}
+      periods={financial.periods}
+      defaultPeriodId={current?.id ?? null}
+      canRecord={canRecordPay}
+      canAdjust={canAdjustTot}
+    />
+  )
+) : (
+  <div
+    key="payments-forbidden"
+    className="rounded-card border border-border bg-card p-8 text-center text-sm text-text-secondary shadow-card"
+  >
+    شما مجاز به مشاهدهٔ اطلاعات مالی این پرونده نیستید.
+  </div>
+);
 
   const followUps = await listCaseFollowUps(header.id);
-  const tasksPanel = <FollowUpTimeline followUps={followUps} />;
+  const tasksPanel = <FollowUpTimeline key="tasks" followUps={followUps} />;
 
   const canRenew = canRegisterRenewal(user, header.ownerId);
   const canRecordRenewalFu = canRecordRenewalFollowUp(user, header.ownerId);
@@ -114,16 +118,17 @@ export default async function ManagerCaseDetailPage({
     getRenewalMeta(header.id),
     listLatestFollowUpByPeriod(header.id),
   ]);
-  const periodsPanel = (
-    <PeriodsPanel
-      caseId={header.id}
-      periods={periods}
-      renewalMeta={renewalMeta}
-      latestFollowUps={latestFollowUps}
-      canRenew={canRenew}
-      canRecordFollowUp={canRecordRenewalFu}
-    />
-  );
+ const periodsPanel = (
+  <PeriodsPanel
+    key="periods"
+    caseId={header.id}
+    periods={periods}
+    renewalMeta={renewalMeta}
+    latestFollowUps={latestFollowUps}
+    canRenew={canRenew}
+    canRecordFollowUp={canRecordRenewalFu}
+  />
+);
 
   const cancellable = header.status === "NEW" || header.status === "IN_PROGRESS";
   const canCancel = cancellable && canCancelCase(user, header.ownerId);

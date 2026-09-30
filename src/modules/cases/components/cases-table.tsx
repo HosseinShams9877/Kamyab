@@ -11,6 +11,12 @@ import type {
 // The cases list card (C-2 / C-15): filter bar + table + pagination.
 // The owner filter is optional (showOwnerFilter) — managers see it, employees
 // do not (their list is already owner-scoped).
+//
+// detailBasePath selects the detail route the "جزئیات" link points at:
+//   managers → "/cases"
+//   employees → "/employee/cases"
+// Without it the link would be hardcoded to the manager route, and an
+// EMPLOYEE clicking it would be bounced out by ManagerLayout's role guard.
 
 type Props = {
   items: CaseListItem[];
@@ -23,6 +29,8 @@ type Props = {
   buildPageHref: (page: number) => string;
   /** Whether to render the "مسئول" filter. Managers: true, employees: false. */
   showOwnerFilter?: boolean;
+  /** Detail-route prefix for the "جزئیات" link (no trailing slash). */
+  detailBasePath?: string;
 };
 
 const inputClass =
@@ -47,6 +55,7 @@ export function CasesTable({
   total,
   buildPageHref,
   showOwnerFilter = true,
+  detailBasePath = "/cases",
 }: Props) {
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
@@ -138,7 +147,7 @@ export function CasesTable({
                 </td>
                 <td className="px-4 py-3">
                   <Link
-                    href={`/cases/${c.id}`}
+                    href={`${detailBasePath}/${c.id}`}
                     className="inline-flex min-h-[36px] items-center rounded-control border border-border px-3 py-1.5 text-sm text-primary transition-colors hover:bg-page"
                   >
                     جزئیات
