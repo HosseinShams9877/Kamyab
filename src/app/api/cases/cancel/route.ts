@@ -16,14 +16,20 @@ export async function POST(request: Request) {
   const parsed = caseCancelSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, message: parsed.error.issues[0]?.message ?? "اطلاعات واردشده معتبر نیست." },
+      {
+        ok: false,
+        message: parsed.error.issues[0]?.message ?? "اطلاعات واردشده معتبر نیست.",
+      },
       { status: 422 },
     );
   }
 
   const result = await cancelCase(user, parsed.data, cancelOpenTasksForCaseTx);
   if (!result.ok) {
-    return NextResponse.json({ ok: false, message: result.message }, { status: result.code });
+    return NextResponse.json(
+      { ok: false, message: result.message },
+      { status: result.code },
+    );
   }
   return NextResponse.json({ ok: true });
 }

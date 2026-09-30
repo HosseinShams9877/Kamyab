@@ -484,3 +484,14 @@ export function notifyOwnerChangeTx(
     data: { userId: args.userId, message: args.message },
   });
 }
+
+/** Write any user notification inside the caller's tx (used by cancel to
+ *  always inform the case's owner, even when the case had no open task). */
+export function notifyUserTx(
+  tx: Prisma.TransactionClient,
+  args: { userId: string; message: string },
+): Promise<unknown> {
+  return tx.notification.create({
+    data: { userId: args.userId, message: args.message },
+  });
+}

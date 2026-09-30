@@ -995,6 +995,7 @@ export async function cancelCase(
   const note = input.note && input.note.trim() ? input.note.trim() : null;
   const active = await getActivePeriod(input.caseId);
   const taskMessage = `پروندهٔ ${kase.number} لغو شد؛ کارهای باز آن بسته شدند.`;
+  const ownerMessage = `پروندهٔ ${kase.number} لغو شد. دلیل: ${reason.title}`;
 
   await repo.caseMutationTx({
     caseId: input.caseId,
@@ -1009,6 +1010,12 @@ export async function cancelCase(
       });
       if (active) await setPeriodStatusTx(tx, active.id, "CANCELLED");
       await cancelOpenTasksTx(tx, { caseId: input.caseId, message: taskMessage });
+      // Always notify the case's owner (C-8), regardless of whether the case
+      // had any open task to close.
+      await repo.notifyUserTx(tx, {
+        userId: kase.ownerId,
+        message: ownerMessage,
+      });
     },
     historyAction: "case.cancelled",
     historyDetail: JSON.stringify({
