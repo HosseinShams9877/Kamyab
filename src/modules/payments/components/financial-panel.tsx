@@ -11,6 +11,8 @@ import type {
   PaymentPeriodOption,
 } from "../payments.types";
 import { paymentPeriodLabel } from "../lib/labels";
+import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // The interactive Financial panel (C-7), hosted in the case page's Payments tab.
 // It owns the three actions — record a payment, adjust a period's total, delete a
@@ -28,7 +30,7 @@ const ghostBtn =
   "min-h-[44px] rounded-control border border-border px-4 text-sm text-text hover:bg-page disabled:cursor-not-allowed disabled:opacity-50";
 const smallBtn =
   "min-h-[36px] rounded-control border border-border px-3 text-xs text-text hover:bg-page disabled:cursor-not-allowed disabled:opacity-50";
-const label = "mb-1 block text-xs text-text-secondary";
+const label = "mb-1.5 block text-sm font-medium text-text";
 const placeholder =
   "rounded-card border border-border bg-card p-8 text-center text-sm text-text-secondary shadow-card";
 
@@ -80,7 +82,6 @@ export function FinancialPanel({
         setError(data.message ?? "خطا در انجام عملیات.");
         return;
       }
-      // Reset the transient inputs; keep the picked method/period for the next entry.
       setAmount("");
       setReceiptDate("");
       setNote("");
@@ -99,8 +100,8 @@ export function FinancialPanel({
     call("PATCH", "/api/cases/period-total", { periodId: adjustPeriodId, totalAmount });
   const remove = (id: string) => call("DELETE", `/api/cases/payments/${id}`);
 
-  // BODY_PLACEHOLDER
   const methodMissing = methods.length === 0;
+
   return (
     <div>
       {(canRecord || canAdjust) && (
@@ -141,37 +142,34 @@ export function FinancialPanel({
               ابتدا از تنظیمات یک روش پرداخت فعال تعریف کنید.
             </p>
           )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={label} htmlFor="pay-amount">مبلغ (تومان)</label>
-              <input
+              <PersianInput
                 id="pay-amount"
-                type="text"
                 inputMode="numeric"
-                dir="ltr"
+                dir="rtl"
+                placeholder="0"
+                className={`${field} text-right`}
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={setAmount}
                 disabled={working}
-                className={field}
               />
             </div>
             <div>
-              <label className={label} htmlFor="pay-date">تاریخ دریافت</label>
-              <input
-                id="pay-date"
-                type="text"
-                dir="ltr"
-                placeholder="۱۴۰۳/۰۵/۰۱"
+              <label className={label}>تاریخ دریافت</label>
+              <JalaliDatePicker
                 value={receiptDate}
-                onChange={(e) => setReceiptDate(e.target.value)}
-                disabled={working}
-                className={field}
+                onChange={setReceiptDate}
+                placeholder="۱۴۰۵/۰۷/۰۱"
+                maxToday
               />
             </div>
             <div>
               <label className={label} htmlFor="pay-method">روش پرداخت</label>
               <select
                 id="pay-method"
+                dir="rtl"
                 value={methodId}
                 onChange={(e) => setMethodId(e.target.value)}
                 disabled={working || methodMissing}
@@ -188,6 +186,7 @@ export function FinancialPanel({
                 <label className={label} htmlFor="pay-period">برای کدام دوره</label>
                 <select
                   id="pay-period"
+                  dir="rtl"
                   value={periodId}
                   onChange={(e) => setPeriodId(e.target.value)}
                   disabled={working}
@@ -205,6 +204,7 @@ export function FinancialPanel({
                 id="pay-note"
                 type="text"
                 maxLength={300}
+                dir="rtl"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 disabled={working}
@@ -212,33 +212,47 @@ export function FinancialPanel({
               />
             </div>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-4 flex gap-2">
             <button
               type="button"
               onClick={submitRecord}
-              disabled={working || methodMissing || !amount.trim() || !receiptDate.trim() || !methodId || !periodId}
+              disabled={
+                working ||
+                methodMissing ||
+                !amount.trim() ||
+                !receiptDate.trim() ||
+                !methodId ||
+                !periodId
+              }
               className={primaryBtn}
             >
               ثبت
             </button>
-            <button type="button" onClick={() => setMode("none")} disabled={working} className={ghostBtn}>
+            <button
+              type="button"
+              onClick={() => setMode("none")}
+              disabled={working}
+              className={ghostBtn}
+            >
               انصراف
             </button>
           </div>
         </div>
       )}
-      {/* ADJUST_PLACEHOLDER */}
+
       {mode === "adjust" && canAdjust && (
         <div className="mb-4 rounded-card border border-border bg-card p-4 shadow-card">
-          <p className="mb-3 text-xs text-text-secondary">
-            فقط مبلغ کل این دوره تغییر می‌کند؛ پرداخت‌ها دست‌نخورده می‌مانند. برای پاک‌کردن، فیلد را خالی بگذارید.
+          <p className="mb-3 text-xs leading-relaxed text-text-secondary">
+            فقط مبلغ کل این دوره تغییر می‌کند؛ پرداخت‌ها دست‌نخورده می‌مانند. برای
+            پاک‌کردن، فیلد را خالی بگذارید.
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {multiPeriod && (
               <div>
                 <label className={label} htmlFor="adj-period">دوره</label>
                 <select
                   id="adj-period"
+                  dir="rtl"
                   value={adjustPeriodId}
                   onChange={(e) => setAdjustPeriodId(e.target.value)}
                   disabled={working}
@@ -252,19 +266,19 @@ export function FinancialPanel({
             )}
             <div>
               <label className={label} htmlFor="adj-total">مبلغ کل (تومان)</label>
-              <input
+              <PersianInput
                 id="adj-total"
-                type="text"
                 inputMode="numeric"
-                dir="ltr"
+                dir="rtl"
+                placeholder="0"
+                className={`${field} text-right`}
                 value={totalAmount}
-                onChange={(e) => setTotalAmount(e.target.value)}
+                onChange={setTotalAmount}
                 disabled={working}
-                className={field}
               />
             </div>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-4 flex gap-2">
             <button
               type="button"
               onClick={submitAdjust}
@@ -273,13 +287,18 @@ export function FinancialPanel({
             >
               ثبت
             </button>
-            <button type="button" onClick={() => setMode("none")} disabled={working} className={ghostBtn}>
+            <button
+              type="button"
+              onClick={() => setMode("none")}
+              disabled={working}
+              className={ghostBtn}
+            >
               انصراف
             </button>
           </div>
         </div>
       )}
-      {/* LIST_PLACEHOLDER */}
+
       {payments.length === 0 ? (
         <div className={placeholder}>هنوز پرداختی ثبت نشده است.</div>
       ) : (
