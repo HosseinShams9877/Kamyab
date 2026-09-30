@@ -93,7 +93,7 @@ export function BirthdayForm({
               id="birthday-hour"
               dir="ltr"
               inputMode="numeric"
-              className={`${inputClass} text-left`}
+              className={`${inputClass} text-right`}
               disabled={!canEdit}
               value={field.value}
               onChange={field.onChange}

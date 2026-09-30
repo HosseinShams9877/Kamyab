@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SmsTemplateRow } from "@/modules/settings/settings.types";
 import {
@@ -15,6 +15,10 @@ import { PersianTextarea } from "@/components/ui/persian-textarea";
 // {customerName} are shown live in the preview against sample data; an unknown
 // placeholder is left untouched (never crashes). An empty body means the event
 // is skipped by the engine. Character + SMS-part counts update as you type.
+//
+// Clicking a placeholder chip INSERTS its token at the current cursor position
+// in the textarea (or replaces the selection), so authors never have to type
+// the token by hand.
 
 function TemplateEditor({
   template,
@@ -27,6 +31,29 @@ function TemplateEditor({
   const [body, setBody] = useState(template.body);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /** Insert a token at the cursor (or replace the selection), then keep focus
+   *  and restore the caret just after the inserted token. */
+  function insertToken(token: string) {
+    if (!canEdit) return;
+    const ta = textareaRef.current;
+    const snippet = `{${token}}`;
+    if (!ta) {
+      setBody((b) => b + snippet);
+      return;
+    }
+    const start = ta.selectionStart ?? body.length;
+    const end = ta.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + snippet + body.slice(end);
+    setBody(next);
+    // Restore the caret after the inserted token, after React re-renders.
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + snippet.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  }
 
   async function save() {
     setBusy(true);
@@ -64,6 +91,7 @@ function TemplateEditor({
       </div>
 
       <PersianTextarea
+        ref={textareaRef}
         rows={3}
         value={body}
         onChange={setBody}
@@ -72,16 +100,20 @@ function TemplateEditor({
         className="w-full rounded-control border border-border bg-card px-3 py-2 text-sm text-text outline-none transition-colors focus:border-primary"
       />
 
+      {/* Clickable placeholder chips: insert at cursor. */}
       <div className="mt-2 flex flex-wrap gap-1.5">
         {SMS_PLACEHOLDERS.map((p) => (
-          <span
+          <button
             key={p.token}
+            type="button"
             title={p.label}
-            className="rounded-badge bg-page px-2 py-0.5 text-xs text-text-secondary"
+            onClick={() => insertToken(p.token)}
+            disabled={!canEdit}
+            className="rounded-badge bg-page px-2 py-0.5 text-xs text-text-secondary transition-colors hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             dir="ltr"
           >
             {`{${p.token}}`}
-          </span>
+          </button>
         ))}
       </div>
 
