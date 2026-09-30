@@ -15,6 +15,11 @@ import {
 // two independent lists — internal notifications (INTERNAL_NOTIFICATION) and
 // customer SMS (SMS_TO_CUSTOMER). The channel is fixed by the parent; the
 // recipient picker is restricted to the recipients valid for that channel.
+//
+// IMPORTANT: this component filters `rules` to its own channel internally, so
+// the parent may pass the FULL list (both channels) — the other channel's rules
+// never leak into this editor. Keeping the filter here (not in the parent) means
+// no caller can accidentally render a rule in both editors.
 
 type Props = {
   serviceId: string;
@@ -70,12 +75,14 @@ function DraftFields({
       <input
         type="text"
         inputMode="numeric"
+        dir="rtl"
         value={value.daysBefore}
         onChange={(e) => onChange({ ...value, daysBefore: e.target.value })}
         placeholder="روز قبل از انقضا"
         className={`${inputClass} w-full sm:w-36`}
       />
       <select
+        dir="rtl"
         value={value.recipient}
         onChange={(e) =>
           onChange({ ...value, recipient: e.target.value as ReminderRecipient })
@@ -110,6 +117,9 @@ export function ReminderRulesEditor({ serviceId, channel, rules, canEdit }: Prop
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(() => emptyDraft(channel));
+
+  // Filter to this channel's rules — callers may pass the full list.
+  const ownRules = rules.filter((r) => r.channel === channel);
 
   const base = `/api/services/${serviceId}/reminder-rules`;
 
@@ -207,13 +217,13 @@ export function ReminderRulesEditor({ serviceId, channel, rules, canEdit }: Prop
           </div>
         )}
 
-        {rules.length === 0 ? (
+        {ownRules.length === 0 ? (
           <p className="rounded-control bg-page px-4 py-6 text-center text-sm text-text-secondary">
             هنوز قاعده‌ای تعریف نشده.
           </p>
         ) : (
           <ul className="divide-y divide-border rounded-control border border-border">
-            {rules.map((rule) => (
+            {ownRules.map((rule) => (
               <li key={rule.id} className="px-3 py-2.5">
                 {editingId === rule.id ? (
                   <div className="flex flex-wrap items-center gap-2">
