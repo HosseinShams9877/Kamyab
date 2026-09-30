@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 // Isomorphic leaf imports (documented client-component exception): the
@@ -13,6 +13,7 @@ import { parseJalali, addMonths, formatJalali } from "@/lib/jalali";
 import { toEnglishDigits } from "@/lib/digits";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // Register a new case (C-4). The form is live: picking a customer that lacks a
 // birth/founding date reveals those fields; picking a service loads its stage
@@ -22,7 +23,8 @@ import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
 // Jalali helper (calendar months, day clamped) — the server recomputes it on save.
 //
 // The four pick fields (customer, service, owner, duration) use the shared
-// SearchableSelect; the three date fields use the shared JalaliDatePicker.
+// SearchableSelect; the three date fields use the shared JalaliDatePicker; the
+// numeric amount uses PersianInput (Persian glyphs, LTR, ASCII stored).
 //
 // `basePath` decides where the user lands after a successful save: the manager
 // form uses the default /cases, the employee form passes /employee/cases so
@@ -72,6 +74,7 @@ export function CaseForm({
     setError,
     setValue,
     watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(caseCreateSchema) as Resolver<FormValues>,
@@ -98,7 +101,6 @@ export function CaseForm({
   const foundingDate = watch("foundingDate");
 
   const selectedCustomer = data.customers.find((c) => c.id === customerId) ?? null;
-  // Birth/founding fields appear only when the picked customer still lacks them.
   const needsBirthInfo = !!selectedCustomer && !selectedCustomer.hasBirthInfo;
   const isNatural = selectedCustomer?.type === "NATURAL";
 
@@ -124,7 +126,6 @@ export function CaseForm({
         if (cancelled) return;
         const next = body?.ok ? body.meta : null;
         setMeta(next);
-        // Preselect the default duration for a renewable service, if any.
         const preset = next?.durations.find((d) => d.isDefault) ?? next?.durations[0];
         if (next?.renewable && preset) setValue("durationId", preset.id);
       })
@@ -195,7 +196,6 @@ export function CaseForm({
         {errors.customerId && <p className={errorClass}>{errors.customerId.message}</p>}
       </div>
 
-      {/* Birth/founding date + greeting — revealed only when the customer lacks it. */}
       {needsBirthInfo && (
         <div className="space-y-4 rounded-control border border-border bg-page p-4">
           <p className="text-sm text-text-secondary">
@@ -271,7 +271,6 @@ export function CaseForm({
         {errors.startDate && <p className={errorClass}>{errors.startDate.message}</p>}
       </div>
 
-      {/* Duration + computed expiry — only for a renewable service (B-3). */}
       {meta?.renewable && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -303,21 +302,35 @@ export function CaseForm({
       )}
 
       <div>
-        <label htmlFor="totalAmount" className={labelClass}>مبلغ کل به تومان (اختیاری)</label>
-        <input
-          id="totalAmount"
-          type="text"
-          inputMode="numeric"
-          dir="ltr"
-          className={`${inputClass} text-left`}
-          {...register("totalAmount")}
+        <label htmlFor="totalAmount" className={labelClass}>
+          مبلغ کل به تومان (اختیاری)
+        </label>
+        <Controller
+          name="totalAmount"
+          control={control}
+          render={({ field }) => (
+            <PersianInput
+              id="totalAmount"
+              dir="ltr"
+              inputMode="numeric"
+              className={`${inputClass} text-right`}
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
         />
         {errors.totalAmount && <p className={errorClass}>{errors.totalAmount.message}</p>}
       </div>
 
       <div>
         <label htmlFor="notes" className={labelClass}>توضیحات (اختیاری)</label>
-        <textarea id="notes" rows={3} className={inputClass} {...register("notes")} />
+        <textarea
+          id="notes"
+          rows={3}
+          dir="rtl"
+          className={inputClass}
+          {...register("notes")}
+        />
         {errors.notes && <p className={errorClass}>{errors.notes.message}</p>}
       </div>
 

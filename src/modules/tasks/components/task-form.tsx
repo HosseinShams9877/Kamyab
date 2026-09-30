@@ -7,12 +7,11 @@ import type { TaskFormData, TaskPriorityKey } from "../tasks.types";
 import { TASK_PRIORITY_LABELS } from "../lib/labels";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
-import { toEnglishDigits } from "@/lib/digits";
+import { PersianTimePicker } from "@/components/ui/persian-time-picker";
 
 // The standalone task-create form (C-11), hosted at /tasks/new. Every pick
-// field uses the shared SearchableSelect; the date uses JalaliDatePicker.
-// Logic: pick a customer → only that customer's cases appear; you may pick only
-// a customer, only a case, both, or neither.
+// field uses the shared SearchableSelect; the date uses JalaliDatePicker; the
+// time uses PersianTimePicker (two scroll columns + a "now" shortcut).
 
 const field =
   "min-h-[44px] w-full rounded-control border border-border bg-card px-3 text-sm text-text placeholder:text-text-secondary disabled:opacity-50";
@@ -46,7 +45,6 @@ export function TaskForm({ data }: { data: TaskFormData }) {
 
   const working = busy || pending;
 
-  // Case options: if a customer is picked, only their cases; otherwise all.
   const caseOptions = customerId
     ? data.casesByCustomer[customerId] ?? []
     : data.cases;
@@ -59,15 +57,15 @@ export function TaskForm({ data }: { data: TaskFormData }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-  title,
-  caseId,
-  customerId,
-  ownerId,
-  dueDate,
-  dueTime,
-  priority,
-  note,
-}),
+          title,
+          caseId,
+          customerId,
+          ownerId,
+          dueDate,
+          dueTime,
+          priority,
+          note,
+        }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
@@ -100,6 +98,7 @@ export function TaskForm({ data }: { data: TaskFormData }) {
           <input
             type="text"
             maxLength={150}
+            dir="rtl"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             disabled={working}
@@ -121,7 +120,6 @@ export function TaskForm({ data }: { data: TaskFormData }) {
             }))}
             placeholder="— انتخاب مشتری —"
             emptyLabel="بدون مشتری"
-            normalizeQuery={toEnglishDigits}
           />
         </div>
 
@@ -179,20 +177,16 @@ export function TaskForm({ data }: { data: TaskFormData }) {
           <JalaliDatePicker
             value={dueDate}
             onChange={setDueDate}
-            placeholder="۱۴۰۳/۰۵/۰۱"
+            placeholder="۱۴۰۵/۰۷/۰۱"
           />
         </div>
 
         <div>
           <label className={labelCls}>ساعت</label>
-          <input
-            type="text"
-            dir="ltr"
-            placeholder="۱۴:۳۰"
+          <PersianTimePicker
             value={dueTime}
-            onChange={(e) => setDueTime(e.target.value)}
+            onChange={setDueTime}
             disabled={working}
-            className={field}
           />
         </div>
 
@@ -201,6 +195,7 @@ export function TaskForm({ data }: { data: TaskFormData }) {
           <input
             type="text"
             maxLength={500}
+            dir="rtl"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             disabled={working}

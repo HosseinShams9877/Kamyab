@@ -1,17 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { thresholdsSchema } from "@/modules/settings/settings.schema";
 import type { Thresholds } from "@/modules/settings/settings.types";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // Time thresholds (B-8). Each field has explanatory text; zero is rejected by
 // the schema (min 1). Values may be typed with Persian digits — normalized
 // server- and client-side before validation.
 
-type FormValues = { archiveDays: string; abandonmentDays: string; staleDays: string };
+type FormValues = {
+  archiveDays: string;
+  abandonmentDays: string;
+  staleDays: string;
+};
 
 const inputClass =
   "w-full rounded-control border border-border bg-card px-3 py-2 text-text outline-none transition-colors focus:border-primary sm:w-40";
@@ -53,8 +58,8 @@ export function ThresholdsForm({
   const [done, setDone] = useState(false);
 
   const {
-    register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(thresholdsSchema) as Resolver<FormValues>,
@@ -102,15 +107,21 @@ export function ThresholdsForm({
       {FIELDS.map((f) => (
         <div key={f.name}>
           <label htmlFor={f.name} className={labelClass}>{f.label}</label>
-          <input
-            id={f.name}
-            type="text"
-            inputMode="numeric"
-            dir="ltr"
-            className={`${inputClass} text-left`}
-            disabled={!canEdit}
-            {...register(f.name)}
-          />
+         <Controller
+  name={f.name}
+  control={control}
+  render={({ field }) => (
+    <PersianInput
+      id={f.name}
+      dir="rtl"
+      inputMode="numeric"
+      className={`${inputClass} text-right`}
+      disabled={!canEdit}
+      value={field.value}
+      onChange={field.onChange}
+    />
+  )}
+/>
           <p className={hintClass}>{f.hint}</p>
           {errors[f.name] && <p className={errorClass}>{errors[f.name]?.message}</p>}
         </div>

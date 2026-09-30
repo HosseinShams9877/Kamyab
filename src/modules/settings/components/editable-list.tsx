@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-// Isomorphic leaf imports (documented client-component exception): the module
-// barrel re-exports server-only code, so client components import types + the
-// module's own lib directly, never "@/modules/settings".
 import type { ListItem, ListKind } from "@/modules/settings/settings.types";
 import type { RenewalEffect } from "@/types/enums";
 import { RENEWAL_EFFECT_LABELS, RENEWAL_EFFECT_OPTIONS } from "../lib/labels";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // The shared editable-list pattern (B-5/B-6/B-7): add at the top; each row is
 // in-place editable with move up/down, an active toggle, and delete. Deletion
@@ -18,7 +16,6 @@ type Props = {
   kind: ListKind;
   items: ListItem[];
   canEdit: boolean;
-  /** Follow-up results carry an effect-on-renewal field (B-6). */
   withEffect?: boolean;
   addLabel: string;
 };
@@ -130,10 +127,11 @@ export function EditableList({
       {canEdit && (
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-start gap-2">
-            <input
+            <PersianInput
               type="text"
+              dir="rtl"
               value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
+              onChange={setNewTitle}
               placeholder="عنوان جدید"
               className={`${inputClass} flex-1`}
             />
@@ -174,10 +172,11 @@ export function EditableList({
               <div className="flex flex-wrap items-center gap-2">
                 {editingId === item.id ? (
                   <>
-                    <input
+                    <PersianInput
                       type="text"
+                      dir="rtl"
                       value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
+                      onChange={setEditTitle}
                       className={`${inputClass} flex-1`}
                     />
                     {withEffect && (

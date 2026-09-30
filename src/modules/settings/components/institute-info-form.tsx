@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { instituteInfoSchema } from "@/modules/settings/settings.schema";
 import type { InstituteInfo } from "@/modules/settings/settings.types";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // Institute information (B-10). The name here is the single source consumed by
 // headings and the login page (rule 1: nothing hardcoded).
@@ -37,6 +38,7 @@ export function InstituteInfoForm({
     register,
     handleSubmit,
     setError,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(instituteInfoSchema) as Resolver<FormValues>,
@@ -96,25 +98,60 @@ export function InstituteInfoForm({
 
       <div>
         <label htmlFor="inst-name" className={labelClass}>نام موسسه</label>
-        <input id="inst-name" type="text" className={inputClass} disabled={!canEdit} {...register("name")} />
+        <input
+          id="inst-name"
+          type="text"
+          dir="rtl"
+          className={inputClass}
+          disabled={!canEdit}
+          {...register("name")}
+        />
         {errors.name && <p className={errorClass}>{errors.name.message}</p>}
       </div>
 
       <div>
         <label htmlFor="inst-phone" className={labelClass}>تلفن</label>
-        <input id="inst-phone" type="text" inputMode="numeric" dir="ltr" className={`${inputClass} text-left`} disabled={!canEdit} {...register("phone")} />
+        <Controller
+          name="phone"
+          control={control}
+          render={({ field }) => (
+            <PersianInput
+              id="inst-phone"
+              dir="ltr"
+              inputMode="numeric"
+              className={`${inputClass} text-right`}
+              disabled={!canEdit}
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
+        />
         {errors.phone && <p className={errorClass}>{errors.phone.message}</p>}
       </div>
 
       <div>
         <label htmlFor="inst-address" className={labelClass}>آدرس (اختیاری)</label>
-        <textarea id="inst-address" rows={2} className={inputClass} disabled={!canEdit} {...register("address")} />
+        <textarea
+          id="inst-address"
+          rows={2}
+          dir="rtl"
+          className={inputClass}
+          disabled={!canEdit}
+          {...register("address")}
+        />
         {errors.address && <p className={errorClass}>{errors.address.message}</p>}
       </div>
 
       <div>
         <label htmlFor="inst-email" className={labelClass}>ایمیل (اختیاری)</label>
-        <input id="inst-email" type="text" dir="ltr" className={`${inputClass} text-left`} disabled={!canEdit} {...register("email")} />
+        <input
+          id="inst-email"
+          type="text"
+          dir="ltr"
+          className={`${inputClass} text-left`}
+          disabled={!canEdit}
+          {...register("email")}
+        />
         {errors.email && <p className={errorClass}>{errors.email.message}</p>}
       </div>
 

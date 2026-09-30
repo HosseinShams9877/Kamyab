@@ -9,6 +9,7 @@ import {
   SMS_PLACEHOLDERS,
 } from "../lib/sms";
 import { smsEventLabel } from "../lib/labels";
+import { PersianTextarea } from "@/components/ui/persian-textarea";
 
 // SMS templates (B-10): one editable body per event. Placeholders like
 // {customerName} are shown live in the preview against sample data; an unknown
@@ -62,10 +63,10 @@ function TemplateEditor({
         <span className="text-xs text-text-secondary">{smsCountLabel(body)}</span>
       </div>
 
-      <textarea
+      <PersianTextarea
         rows={3}
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={setBody}
         disabled={!canEdit}
         dir="rtl"
         className="w-full rounded-control border border-border bg-card px-3 py-2 text-sm text-text outline-none transition-colors focus:border-primary"

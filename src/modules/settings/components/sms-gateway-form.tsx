@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { smsGatewaySchema } from "@/modules/settings/settings.schema";
 import type { GatewayView } from "@/modules/settings/settings.types";
 import { SMS_PROVIDERS } from "../lib/labels";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // SMS gateway (B-10). The API key is write-only: the server never echoes it, so
 // the field starts blank and a blank submission keeps the stored key. Real-send
@@ -44,6 +45,7 @@ export function SmsGatewayForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(smsGatewaySchema) as Resolver<FormValues>,
@@ -107,7 +109,13 @@ export function SmsGatewayForm({
 
       <div>
         <label htmlFor="gw-provider" className={labelClass}>سامانه پیامک</label>
-        <select id="gw-provider" className={inputClass} disabled={!canEdit} {...register("provider")}>
+        <select
+          id="gw-provider"
+          dir="rtl"
+          className={inputClass}
+          disabled={!canEdit}
+          {...register("provider")}
+        >
           <option value="">— انتخاب سامانه —</option>
           {SMS_PROVIDERS.map((p) => (
             <option key={p.value} value={p.value}>{p.label}</option>
@@ -118,7 +126,21 @@ export function SmsGatewayForm({
 
       <div>
         <label htmlFor="gw-sender" className={labelClass}>شماره فرستنده</label>
-        <input id="gw-sender" type="text" dir="ltr" className={`${inputClass} text-left`} disabled={!canEdit} {...register("senderNumber")} />
+        <Controller
+          name="senderNumber"
+          control={control}
+          render={({ field }) => (
+            <PersianInput
+              id="gw-sender"
+              dir="ltr"
+              inputMode="numeric"
+              className={`${inputClass} text-right`}
+              disabled={!canEdit}
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
+        />
         {errors.senderNumber && <p className={errorClass}>{errors.senderNumber.message}</p>}
       </div>
 
@@ -129,7 +151,11 @@ export function SmsGatewayForm({
           type="password"
           dir="ltr"
           autoComplete="off"
-          placeholder={gateway.hasApiKey ? "••••••••  (برای تغییر، کلید جدید را وارد کنید)" : "کلید API را وارد کنید"}
+          placeholder={
+            gateway.hasApiKey
+              ? "••••••••  (برای تغییر، کلید جدید را وارد کنید)"
+              : "کلید API را وارد کنید"
+          }
           className={`${inputClass} text-left`}
           disabled={!canEdit}
           {...register("apiKey")}

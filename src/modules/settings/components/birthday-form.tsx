@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { birthdaySchema } from "@/modules/settings/settings.schema";
 import type { BirthdaySettings } from "@/modules/settings/settings.types";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // Birthday greeting (B-9). Master switch (default OFF) + send hour (0–23,
 // default 10). The two greeting texts (natural person / legal entity) are edited
@@ -33,6 +34,7 @@ export function BirthdayForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(birthdaySchema) as Resolver<FormValues>,
@@ -83,14 +85,20 @@ export function BirthdayForm({
 
       <div>
         <label htmlFor="birthday-hour" className={labelClass}>ساعت ارسال (۰ تا ۲۳)</label>
-        <input
-          id="birthday-hour"
-          type="text"
-          inputMode="numeric"
-          dir="ltr"
-          className={`${inputClass} text-left`}
-          disabled={!canEdit}
-          {...register("sendHour")}
+        <Controller
+          name="sendHour"
+          control={control}
+          render={({ field }) => (
+            <PersianInput
+              id="birthday-hour"
+              dir="ltr"
+              inputMode="numeric"
+              className={`${inputClass} text-left`}
+              disabled={!canEdit}
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
         />
         {errors.sendHour && <p className={errorClass}>{errors.sendHour.message}</p>}
       </div>

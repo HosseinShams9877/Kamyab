@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toEnglishDigits, toPersianDigits } from "@/lib/digits";
 
 // A searchable single-select. Behaves like a <select> but with a filter input
 // at the top of the dropdown. Client component; the parent owns the value.
+//
+// `numericDisplay`: when true, the query field renders Persian digits and
+// stores ASCII — for selects whose options are numeric (case numbers, IDs).
+// When false (default) the query is a normal RTL text field.
 
 export type SearchableOption = { value: string; label: string };
 
@@ -16,6 +21,8 @@ type Props = {
   disabled?: boolean;
   /** Normalize the query before matching (e.g. Persian → English digits). */
   normalizeQuery?: (q: string) => string;
+  /** Show the query input with Persian digits + LTR layout. */
+  numericDisplay?: boolean;
 };
 
 export function SearchableSelect({
@@ -26,6 +33,7 @@ export function SearchableSelect({
   emptyLabel,
   disabled,
   normalizeQuery,
+  numericDisplay = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -111,11 +119,20 @@ export function SearchableSelect({
             <input
               autoFocus
               type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              dir={numericDisplay ? "ltr" : "rtl"}
+              value={numericDisplay ? toPersianDigits(query) : query}
+              onChange={(e) =>
+                setQuery(
+                  numericDisplay
+                    ? toEnglishDigits(e.target.value)
+                    : e.target.value,
+                )
+              }
               onKeyDown={onKeyDown}
               placeholder="جستجو…"
-              className="w-full rounded-control border border-border bg-page px-2 py-1.5 text-sm text-text outline-none focus:border-primary"
+              className={`w-full rounded-control border border-border bg-page px-2 py-1.5 text-sm text-text outline-none focus:border-primary ${
+                numericDisplay ? "text-left" : ""
+              }`}
             />
           </div>
           <ul role="listbox" className="max-h-60 overflow-y-auto p-1">
@@ -125,7 +142,9 @@ export function SearchableSelect({
                   type="button"
                   onClick={() => pick("")}
                   className={`w-full rounded-control px-3 py-2 text-right text-sm ${
-                    value === "" ? "bg-page text-text" : "text-text-secondary hover:bg-page"
+                    value === ""
+                      ? "bg-page text-text"
+                      : "text-text-secondary hover:bg-page"
                   }`}
                 >
                   {emptyLabel}

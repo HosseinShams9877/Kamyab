@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 // Isomorphic schema leaf import (documented client-component exception): the
@@ -11,10 +11,16 @@ import {
   updateCustomerSchema,
 } from "@/modules/customers/customers.schema";
 import type { CustomerDetail } from "@/modules/customers/customers.types";
+import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // Create / edit a customer (C-3). The first choice is the type, and the rest of
 // the form changes with it. The SAME Zod schema validates here and on the
 // server, so the browser gives fast feedback while the API stays the real gate.
+//
+// Numeric-identity fields (mobile / nationalId / nationalEntityId / landline)
+// render through PersianInput: the user sees Persian glyphs right-aligned, the
+// form stores ASCII. Text fields are dir="rtl". Dates use JalaliDatePicker.
 //
 // `basePath` decides where the user lands after a successful save: the manager
 // form uses the default /customers, the employee form passes
@@ -70,13 +76,16 @@ export function CustomerForm(props: Props) {
   const router = useRouter();
   const basePath = props.basePath ?? "/customers";
   const [formError, setFormError] = useState<string | null>(null);
-  const schema = props.mode === "create" ? createCustomerSchema : updateCustomerSchema;
+  const schema =
+    props.mode === "create" ? createCustomerSchema : updateCustomerSchema;
 
   const {
     register,
     handleSubmit,
     setError,
     watch,
+    setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema) as Resolver<FormValues>,
@@ -131,10 +140,11 @@ export function CustomerForm(props: Props) {
           {formError}
         </div>
       )}
+
       {/* Customer type — the first choice; the rest of the form follows it. */}
       <div>
         <label htmlFor="type" className={labelClass}>نوع مشتری</label>
-        <select id="type" className={inputClass} {...register("type")}>
+        <select id="type" dir="rtl" className={inputClass} {...register("type")}>
           <option value="NATURAL">حقیقی</option>
           <option value="LEGAL">حقوقی</option>
         </select>
@@ -143,54 +153,77 @@ export function CustomerForm(props: Props) {
       {isNatural ? (
         <div>
           <label htmlFor="fullName" className={labelClass}>نام و نام خانوادگی</label>
-          <input id="fullName" type="text" className={inputClass} {...register("fullName")} />
+          <input
+            id="fullName"
+            type="text"
+            dir="rtl"
+            className={inputClass}
+            {...register("fullName")}
+          />
           {errors.fullName && <p className={errorClass}>{errors.fullName.message}</p>}
         </div>
       ) : (
         <div>
           <label htmlFor="companyName" className={labelClass}>نام شرکت</label>
-          <input id="companyName" type="text" className={inputClass} {...register("companyName")} />
+          <input
+            id="companyName"
+            type="text"
+            dir="rtl"
+            className={inputClass}
+            {...register("companyName")}
+          />
           {errors.companyName && <p className={errorClass}>{errors.companyName.message}</p>}
         </div>
       )}
 
+      {/* Mobile — Persian glyphs right-aligned, ASCII stored. */}
       <div>
         <label htmlFor="mobile" className={labelClass}>شماره موبایل</label>
-        <input
-          id="mobile"
-          type="text"
-          inputMode="numeric"
-          dir="ltr"
-          placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-          className={`${inputClass} text-left`}
-          {...register("mobile")}
+        <Controller
+          name="mobile"
+          control={control}
+          render={({ field }) => (
+            <PersianInput
+              id="mobile"
+              dir="rtl"
+              inputMode="numeric"
+              placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+              className={`${inputClass} text-right`}
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
         />
         {errors.mobile && <p className={errorClass}>{errors.mobile.message}</p>}
       </div>
+
       {isNatural ? (
         <>
           <div>
             <label htmlFor="nationalId" className={labelClass}>کد ملی (اختیاری)</label>
-            <input
-              id="nationalId"
-              type="text"
-              inputMode="numeric"
-              dir="ltr"
-              className={`${inputClass} text-left`}
-              {...register("nationalId")}
+            <Controller
+              name="nationalId"
+              control={control}
+              render={({ field }) => (
+                <PersianInput
+                  id="nationalId"
+                  dir="rtl"
+                  inputMode="numeric"
+                  className={`${inputClass} text-right`}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
             {errors.nationalId && <p className={errorClass}>{errors.nationalId.message}</p>}
           </div>
           <div>
-            <label htmlFor="birthDate" className={labelClass}>تاریخ تولد (اختیاری)</label>
-            <input
-              id="birthDate"
-              type="text"
-              inputMode="numeric"
-              dir="ltr"
+            <label className={labelClass}>تاریخ تولد (اختیاری)</label>
+            <JalaliDatePicker
+              value={watch("birthDate")}
+              onChange={(v) => setValue("birthDate", v, { shouldValidate: true })}
               placeholder="۱۳۷۰/۰۱/۰۱"
-              className={`${inputClass} text-left`}
-              {...register("birthDate")}
+              maxToday
             />
             {errors.birthDate && <p className={errorClass}>{errors.birthDate.message}</p>}
           </div>
@@ -199,36 +232,54 @@ export function CustomerForm(props: Props) {
         <>
           <div>
             <label htmlFor="nationalEntityId" className={labelClass}>شناسه ملی (اختیاری)</label>
-            <input
-              id="nationalEntityId"
-              type="text"
-              inputMode="numeric"
-              dir="ltr"
-              className={`${inputClass} text-left`}
-              {...register("nationalEntityId")}
+            <Controller
+              name="nationalEntityId"
+              control={control}
+              render={({ field }) => (
+                <PersianInput
+                  id="nationalEntityId"
+                  dir="rtl"
+                  inputMode="numeric"
+                  className={`${inputClass} text-right`}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
-            {errors.nationalEntityId && <p className={errorClass}>{errors.nationalEntityId.message}</p>}
+            {errors.nationalEntityId && (
+              <p className={errorClass}>{errors.nationalEntityId.message}</p>
+            )}
           </div>
           <div>
-            <label htmlFor="registrationNumber" className={labelClass}>شماره ثبت (اختیاری)</label>
-            <input id="registrationNumber" type="text" className={inputClass} {...register("registrationNumber")} />
-            {errors.registrationNumber && <p className={errorClass}>{errors.registrationNumber.message}</p>}
-          </div>
-          <div>
-            <label htmlFor="foundingDate" className={labelClass}>تاریخ تأسیس (اختیاری)</label>
+            <label htmlFor="registrationNumber" className={labelClass}>
+              شماره ثبت (اختیاری)
+            </label>
             <input
-              id="foundingDate"
+              id="registrationNumber"
               type="text"
-              inputMode="numeric"
-              dir="ltr"
+              dir="rtl"
+              className={inputClass}
+              {...register("registrationNumber")}
+            />
+            {errors.registrationNumber && (
+              <p className={errorClass}>{errors.registrationNumber.message}</p>
+            )}
+          </div>
+          <div>
+            <label className={labelClass}>تاریخ تأسیس (اختیاری)</label>
+            <JalaliDatePicker
+              value={watch("foundingDate")}
+              onChange={(v) => setValue("foundingDate", v, { shouldValidate: true })}
               placeholder="۱۳۹۰/۰۱/۰۱"
-              className={`${inputClass} text-left`}
-              {...register("foundingDate")}
+              maxToday
             />
-            {errors.foundingDate && <p className={errorClass}>{errors.foundingDate.message}</p>}
+            {errors.foundingDate && (
+              <p className={errorClass}>{errors.foundingDate.message}</p>
+            )}
           </div>
         </>
       )}
+
       {/* Greeting checkbox — only meaningful once the type's date is filled. */}
       <div>
         <label
@@ -255,32 +306,56 @@ export function CustomerForm(props: Props) {
 
       <div>
         <label htmlFor="landline" className={labelClass}>تلفن ثابت (اختیاری)</label>
-        <input
-          id="landline"
-          type="text"
-          inputMode="numeric"
-          dir="ltr"
-          className={`${inputClass} text-left`}
-          {...register("landline")}
+        <Controller
+          name="landline"
+          control={control}
+          render={({ field }) => (
+            <PersianInput
+              id="landline"
+              dir="rtl"
+              inputMode="numeric"
+              className={`${inputClass} text-right`}
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
         />
         {errors.landline && <p className={errorClass}>{errors.landline.message}</p>}
       </div>
 
       <div>
         <label htmlFor="city" className={labelClass}>شهر (اختیاری)</label>
-        <input id="city" type="text" className={inputClass} {...register("city")} />
+        <input
+          id="city"
+          type="text"
+          dir="rtl"
+          className={inputClass}
+          {...register("city")}
+        />
         {errors.city && <p className={errorClass}>{errors.city.message}</p>}
       </div>
 
       <div>
         <label htmlFor="address" className={labelClass}>آدرس (اختیاری)</label>
-        <textarea id="address" rows={2} className={inputClass} {...register("address")} />
+        <textarea
+          id="address"
+          rows={2}
+          dir="rtl"
+          className={inputClass}
+          {...register("address")}
+        />
         {errors.address && <p className={errorClass}>{errors.address.message}</p>}
       </div>
 
       <div>
         <label htmlFor="notes" className={labelClass}>توضیحات (اختیاری)</label>
-        <textarea id="notes" rows={3} className={inputClass} {...register("notes")} />
+        <textarea
+          id="notes"
+          rows={3}
+          dir="rtl"
+          className={inputClass}
+          {...register("notes")}
+        />
         {errors.notes && <p className={errorClass}>{errors.notes.message}</p>}
       </div>
 

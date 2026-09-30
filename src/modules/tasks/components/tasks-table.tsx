@@ -64,7 +64,11 @@ export function TasksTable({
           </div>
           {showOwnerFilter && (
             <div>
-              <select name="ownerId" defaultValue={params.ownerId ?? ""} className={inputClass}>
+              <select
+                name="ownerId"
+                defaultValue={params.ownerId ?? ""}
+                className={inputClass}
+              >
                 <option value="">مسئول</option>
                 {owners.map((o) => (
                   <option key={o.id} value={o.id}>{o.fullName}</option>
@@ -73,7 +77,11 @@ export function TasksTable({
             </div>
           )}
           <div>
-            <select name="serviceId" defaultValue={params.serviceId ?? ""} className={inputClass}>
+            <select
+              name="serviceId"
+              defaultValue={params.serviceId ?? ""}
+              className={inputClass}
+            >
               <option value="">خدمت</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -81,7 +89,11 @@ export function TasksTable({
             </select>
           </div>
           <div>
-            <select name="priority" defaultValue={params.priority ?? ""} className={inputClass}>
+            <select
+              name="priority"
+              defaultValue={params.priority ?? ""}
+              className={inputClass}
+            >
               <option value="">اولویت</option>
               {PRIORITY_VALUES.map((p) => (
                 <option key={p} value={p}>{TASK_PRIORITY_LABELS[p]}</option>
@@ -115,7 +127,9 @@ export function TasksTable({
             <tbody>
               {items.map((t) => (
                 <tr key={t.id} className="border-t border-border">
-                  <td className="px-4 py-3 text-text break-words font-medium">{t.title}</td>
+                  <td className="px-4 py-3 text-text break-words font-medium">
+                    {t.title}
+                  </td>
                   <td className="px-4 py-3 text-text-secondary">
                     {t.caseNumber ? (
                       <span dir="ltr" className="text-text">
@@ -123,19 +137,34 @@ export function TasksTable({
                       </span>
                     ) : null}
                     {t.customerName ? (
-                      <div className={t.caseNumber ? "mt-1 text-xs text-text-secondary" : "text-text"}>
+                      <div
+                        className={
+                          t.caseNumber
+                            ? "mt-1 text-xs text-text-secondary"
+                            : "text-text"
+                        }
+                      >
                         {t.customerName}
                       </div>
                     ) : null}
                     {!t.caseNumber && !t.customerName && "—"}
                   </td>
-                  <td className="px-4 py-3 text-text-secondary">{t.serviceName ?? "—"}</td>
+                  <td className="px-4 py-3 text-text-secondary">
+                    {t.serviceName ?? "—"}
+                  </td>
                   <td className="px-4 py-3 text-text-secondary">{t.ownerName}</td>
                   <td className="px-4 py-3 text-text-secondary" dir="ltr">
-                    {toPersianDigits(t.dueDate)}
+                    <span>{toPersianDigits(t.dueDate)}</span>
+                    {t.dueTime && (
+                      <span className="mr-1 text-xs text-text-secondary">
+                        {" "}— {toPersianDigits(t.dueTime)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-badge px-2.5 py-0.5 text-xs ${TASK_PRIORITY_BADGE[t.priority]}`}>
+                    <span
+                      className={`rounded-badge px-2.5 py-0.5 text-xs ${TASK_PRIORITY_BADGE[t.priority]}`}
+                    >
                       {TASK_PRIORITY_LABELS[t.priority]}
                     </span>
                   </td>
@@ -171,7 +200,10 @@ export function TasksTable({
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-text-secondary">
+                  <td
+                    colSpan={8}
+                    className="px-4 py-8 text-center text-text-secondary"
+                  >
                     کاری در این نما وجود ندارد.
                   </td>
                 </tr>
