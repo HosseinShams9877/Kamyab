@@ -36,6 +36,7 @@ export {
   listReminderCandidates,
   listUnfollowedRenewals,
   abandonExpiredPeriods,
+  periodHasOpenStages,
 } from "./periods.service";
 
 // --- Types (isomorphic) -----------------------------------------------------

@@ -32,6 +32,7 @@ import {
   setPeriodStatusTx,
   setPeriodFollowUpTx,
   isAbandonable,
+  periodHasOpenStages,
   RENEWAL_FORBIDDEN,
   SERVICE_NOT_RENEWABLE,
   NO_ACTIVE_PERIOD,
@@ -330,6 +331,7 @@ export function canAddStages(user: Authorizable, ownerId: string): boolean {
 type StageResult = { ok: true } | { ok: false; code: 403 | 404 | 409; message: string };
 
 const PROMOTING_OPS = new Set(["start", "done", "reject", "not_needed", "reopen"]);
+const COMPLETING_OPS = new Set(["done", "not_needed"]);
 
 export async function runStageAction(
   user: Authorizable,
@@ -359,7 +361,32 @@ export async function runStageAction(
     caseId: ctx.caseId,
     actorId: user.id,
     promoteFromNew: kase.status === "NEW" && PROMOTING_OPS.has(input.op),
-    apply: (tx) => applyStageActionTx(tx, { stageId, op: input.op, note, actorId: user.id }),
+    apply: async (tx) => {
+      await applyStageActionTx(tx, {
+        stageId,
+        op: input.op,
+        note,
+        actorId: user.id,
+      });
+      // After a completing op, if the period has no open stage left, flip the
+      // case to COMPLETED in the same transaction (C-6 side effect #4).
+      if (COMPLETING_OPS.has(input.op)) {
+        const hasOpen = await periodHasOpenStages(tx, ctx.periodId);
+        if (!hasOpen) {
+          await tx.case.update({
+            where: { id: ctx.caseId },
+            data: { status: "COMPLETED" },
+          });
+        }
+      }
+      // On Reopen of a previously-completed case, flip it back to IN_PROGRESS.
+      if (input.op === "reopen" && kase.status === "COMPLETED") {
+        await tx.case.update({
+          where: { id: ctx.caseId },
+          data: { status: "IN_PROGRESS" },
+        });
+      }
+    },
     historyAction: `stage.${input.op}`,
     historyDetail: JSON.stringify({
       stageId,
@@ -517,8 +544,6 @@ function listRowName(c: {
   return c.type === "LEGAL" ? c.companyName ?? "—" : c.fullName ?? "—";
 }
 
-/** The first OPEN stage of the case's ACTIVE period, or null when all stages
- *  are closed / the period has no path. Computed at read time (rule 2). */
 function currentStageTitle(
   periods: {
     status: string;
@@ -655,9 +680,6 @@ export async function getActiveReceivables(user: Authorizable): Promise<number> 
   return sum;
 }
 
-// --- Case list stats (C-2 style, /cases header) -----------------------------
-
-/** The four headline numbers above the case list, scoped like the list. */
 export async function getCaseStats(user: Authorizable): Promise<CaseStats> {
   const scope = scopeByOwnership(user, "cases");
   if (scope === null) {
@@ -685,13 +707,11 @@ export async function getCaseStats(user: Authorizable): Promise<CaseStats> {
   return { total, active, waitingAction, completedThisMonth };
 }
 
-/** Active services for the list's service filter dropdown. */
 export async function listServiceFilterOptions(): Promise<ServiceFilterOption[]> {
   const rows = await listActiveServiceOptions();
   return rows.map((s) => ({ id: s.id, name: s.name }));
 }
 
-/** Active employees for the list's owner filter dropdown. */
 export async function listOwnerFilterOptions(): Promise<OwnerFilterOption[]> {
   const rows = await listCaseOwnerOptions();
   return rows.map((o) => ({ id: o.id, fullName: o.fullName }));
@@ -1053,8 +1073,6 @@ export function canChangeOwner(user: Authorizable, ownerId: string): boolean {
   );
 }
 
-/** The dialog meta: current owner + active candidates (current owner excluded)
- *  + the number of OPEN tasks that would travel with the case. */
 export async function getOwnerChangeMeta(
   caseId: string,
 ): Promise<OwnerChangeMeta | null> {
@@ -1062,7 +1080,7 @@ export async function getOwnerChangeMeta(
   if (!kase) return null;
 
   const [candidates, openTasks] = await Promise.all([
-    listOwnerFilterOptions(), // already returns active employees
+    listOwnerFilterOptions(),
     repo.countOpenTasksForCase(caseId),
   ]);
 
@@ -1073,13 +1091,6 @@ export async function getOwnerChangeMeta(
   };
 }
 
-/** Reassign a case to another active employee, optionally moving its OPEN
- *  tasks along. Everything happens in one transaction (rule 4):
- *    1. the injected write (case.ownerId + optional task reassignment +
- *       the owner-change notification),
- *    2. Case.lastActivityAt bump,
- *    3. an ActivityHistory row (`case.owner_changed`).
- *  A cancelled case is rejected: its path is frozen. */
 export async function changeCaseOwner(
   user: Authorizable,
   input: CaseChangeOwnerInput,

@@ -28,7 +28,6 @@ import type {
 
 const PASSED_STAGE_STATUSES = ["DONE", "NOT_NEEDED"];
 
-/** A stored Date back to an ASCII Jalali "YYYY/MM/DD" string. */
 function dateToJalali(date: Date | null): string | null {
   if (!date) return null;
   return formatJalali(toJalali(date), { persianDigits: false });
@@ -163,6 +162,15 @@ export function moveStageTx(
   return repo.moveStageTx(tx, args);
 }
 
+/** Whether a period still has any open (non-closed) stage. Used by the cases
+ *  service to decide whether to flip Case.status to COMPLETED after a Done. */
+export function periodHasOpenStages(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+): Promise<boolean> {
+  return repo.periodHasOpenStages(tx, periodId);
+}
+
 // --- Financial seams (C-7 / Phase 11) ---------------------------------------
 
 export async function getPeriodCase(
@@ -240,11 +248,7 @@ export function setPeriodStatusTx(
 }
 
 /**
- * The renewals work-queue for one tab (C-10), with optional filters. Reads every
- * ACTIVE/ABANDONED/RENEWED period of a non-cancelled case, computes
- * days-remaining + the abandon-eligibility flag at read time (rule 2), keeps only
- * the rows the tab classifies in, then applies the user-facing filters (search,
- * service, owner, follow-up status). The query orders by expiry ascending.
+ * The renewals work-queue for one tab (C-10), with optional filters.
  */
 export async function getRenewalsView(
   tab: RenewalTab,
@@ -312,9 +316,6 @@ function toRenewalRow(
     ),
   };
 }
-
-/** The four headline stats above the renewals table (C-10). When `ownerId` is
- *  given, the counts are scoped to that employee's cases (C-15 employee panel). */
 
 export async function getRenewalStats(ownerId?: string): Promise<RenewalStats> {
   const rows = await repo.findRenewalsQueue();

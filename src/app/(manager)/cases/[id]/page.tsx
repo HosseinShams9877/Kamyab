@@ -43,10 +43,10 @@ import {
   FollowUpTimeline,
 } from "@/modules/followups";
 
-// Manager case detail page (C-5). Access is gated by the same rules as the
-// employee page: a user without cases.view_all may open only a case they own;
-// every per-action capability is scoped to header.ownerId and the API routes
-// re-check on each request.
+// Manager case detail page (C-5). Compact header + two summary cards + tabs.
+// Case-level actions (cancel / restore) sit in the header line so they don't
+// dangle in the middle of the page.
+
 export default async function ManagerCaseDetailPage({
   params,
 }: {
@@ -89,25 +89,25 @@ export default async function ManagerCaseDetailPage({
     : null;
 
   const paymentsPanel = canViewFin ? (
-  financial && (
-    <FinancialPanel
-      key="payments"
-      payments={financial.payments}
-      methods={financial.methods}
-      periods={financial.periods}
-      defaultPeriodId={current?.id ?? null}
-      canRecord={canRecordPay}
-      canAdjust={canAdjustTot}
-    />
-  )
-) : (
-  <div
-    key="payments-forbidden"
-    className="rounded-card border border-border bg-card p-8 text-center text-sm text-text-secondary shadow-card"
-  >
-    شما مجاز به مشاهدهٔ اطلاعات مالی این پرونده نیستید.
-  </div>
-);
+    financial && (
+      <FinancialPanel
+        key="payments"
+        payments={financial.payments}
+        methods={financial.methods}
+        periods={financial.periods}
+        defaultPeriodId={current?.id ?? null}
+        canRecord={canRecordPay}
+        canAdjust={canAdjustTot}
+      />
+    )
+  ) : (
+    <div
+      key="payments-forbidden"
+      className="rounded-card border border-border bg-card p-8 text-center text-sm text-text-secondary shadow-card"
+    >
+      شما مجاز به مشاهدهٔ اطلاعات مالی این پرونده نیستید.
+    </div>
+  );
 
   const followUps = await listCaseFollowUps(header.id);
   const tasksPanel = <FollowUpTimeline key="tasks" followUps={followUps} />;
@@ -118,17 +118,17 @@ export default async function ManagerCaseDetailPage({
     getRenewalMeta(header.id),
     listLatestFollowUpByPeriod(header.id),
   ]);
- const periodsPanel = (
-  <PeriodsPanel
-    key="periods"
-    caseId={header.id}
-    periods={periods}
-    renewalMeta={renewalMeta}
-    latestFollowUps={latestFollowUps}
-    canRenew={canRenew}
-    canRecordFollowUp={canRecordRenewalFu}
-  />
-);
+  const periodsPanel = (
+    <PeriodsPanel
+      key="periods"
+      caseId={header.id}
+      periods={periods}
+      renewalMeta={renewalMeta}
+      latestFollowUps={latestFollowUps}
+      canRenew={canRenew}
+      canRecordFollowUp={canRecordRenewalFu}
+    />
+  );
 
   const cancellable = header.status === "NEW" || header.status === "IN_PROGRESS";
   const canCancel = cancellable && canCancelCase(user, header.ownerId);
@@ -148,49 +148,71 @@ export default async function ManagerCaseDetailPage({
         : `${toPersianDigits(String(Math.abs(header.daysRemaining)))} روز از انقضا گذشته`;
 
   const amountText = (v: number | null) => (v === null ? "—" : formatToman(v));
+  const progressPercent =
+    header.progressTotal === 0
+      ? 0
+      : Math.round((header.progressPassed / header.progressTotal) * 100);
 
   return (
-    <main className="mx-auto w-full px-4 py-10">
-      <div className="mb-6">
-        <Link
-          href="/cases"
-          className="text-sm text-primary hover:underline"
-        >
+    <main className="mx-auto w-full px-4 py-8">
+      {/* Breadcrumb */}
+      <div className="mb-4">
+        <Link href="/cases" className="text-sm text-primary hover:underline">
           ← بازگشت به پرونده‌ها
         </Link>
       </div>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold text-text" dir="ltr">
-          {toPersianDigits(header.number)}
-        </h1>
-        <span
-          className={`rounded-badge px-2.5 py-0.5 text-xs ${CASE_STATUS_BADGE[header.status]}`}
-        >
-          {CASE_STATUS_LABELS[header.status]}
-        </span>
+      {/* Title row + case-level actions */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-bold text-text" dir="ltr">
+            {toPersianDigits(header.number)}
+          </h1>
+          <span
+            className={`rounded-badge px-2.5 py-0.5 text-xs ${CASE_STATUS_BADGE[header.status]}`}
+          >
+            {CASE_STATUS_LABELS[header.status]}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {isCancelled
+            ? canRestoreThis && <CaseRestoreButton caseId={header.id} />
+            : canCancel && (
+                <CaseCancelDialog
+                  caseId={header.id}
+                  reasons={cancelReasons}
+                  openStages={openStages}
+                  openTasks={openTaskCount}
+                  balance={current?.balance ?? null}
+                />
+              )}
+        </div>
       </div>
 
-      <section className="mb-6 rounded-card border border-border bg-card p-6 shadow-card">
+      {/* Info card */}
+      <section className="mb-4 rounded-card border border-border bg-card p-5 shadow-card">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <dt className="text-sm text-text-secondary">مشتری</dt>
-            <dd className="mt-0.5">
+            <dt className="text-xs text-text-secondary">مشتری</dt>
+            <dd className="mt-1">
               <Link
                 href={`/customers/${header.customerId}`}
-                className="text-text hover:text-primary hover:underline"
+                className="text-sm text-text hover:text-primary hover:underline"
               >
                 {header.customerName}
               </Link>
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-text-secondary">خدمت</dt>
-            <dd className="mt-0.5 text-text break-words">{header.serviceName}</dd>
+            <dt className="text-xs text-text-secondary">خدمت</dt>
+            <dd className="mt-1 text-sm text-text break-words">
+              {header.serviceName}
+            </dd>
           </div>
           <div>
-            <dt className="text-sm text-text-secondary">کارشناس مسئول</dt>
-            <dd className="mt-0.5 flex items-center gap-2 text-text">
+            <dt className="text-xs text-text-secondary">کارشناس مسئول</dt>
+            <dd className="mt-1 flex items-center gap-2 text-sm text-text">
               <span>{header.ownerName}</span>
               {canChangeOwnerFlag && ownerChangeMeta && (
                 <CaseChangeOwnerDialog
@@ -203,94 +225,97 @@ export default async function ManagerCaseDetailPage({
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-text-secondary">تاریخ شروع</dt>
-            <dd className="mt-0.5 text-text" dir="ltr">
+            <dt className="text-xs text-text-secondary">تاریخ شروع</dt>
+            <dd className="mt-1 text-sm text-text" dir="ltr">
               {header.startDate ? toPersianDigits(header.startDate) : "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-text-secondary">تاریخ انقضا</dt>
-            <dd className="mt-0.5 text-text" dir="ltr">
+            <dt className="text-xs text-text-secondary">تاریخ انقضا</dt>
+            <dd className="mt-1 text-sm text-text" dir="ltr">
               {header.expiryDate ? toPersianDigits(header.expiryDate) : "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-text-secondary">وضعیت انقضا</dt>
-            <dd className="mt-0.5 text-text">{daysText}</dd>
+            <dt className="text-xs text-text-secondary">وضعیت انقضا</dt>
+            <dd className="mt-1 text-sm text-text">{daysText}</dd>
           </div>
         </dl>
       </section>
 
-      {(canCancel || isCancelled) && (
-        <section className="mb-6 rounded-card border border-border bg-card p-4 shadow-card">
-          {isCancelled ? (
-            <div className="flex flex-col gap-3">
-              <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                {cancellationDetail?.date && (
-                  <div className="flex gap-2">
-                    <dt className="text-text-secondary">تاریخ لغو</dt>
-                    <dd className="text-text" dir="ltr">
-                      {toPersianDigits(cancellationDetail.date)}
-                    </dd>
-                  </div>
-                )}
-                {cancellationDetail?.reasonTitle && (
-                  <div className="flex gap-2">
-                    <dt className="text-text-secondary">دلیل لغو</dt>
-                    <dd className="text-text">{cancellationDetail.reasonTitle}</dd>
-                  </div>
-                )}
-                {cancellationDetail?.cancelledByName && (
-                  <div className="flex gap-2">
-                    <dt className="text-text-secondary">لغوکننده</dt>
-                    <dd className="text-text">{cancellationDetail.cancelledByName}</dd>
-                  </div>
-                )}
-                {cancellationDetail?.note && (
-                  <div className="flex gap-2 sm:col-span-2">
-                    <dt className="text-text-secondary">یادداشت</dt>
-                    <dd className="text-text break-words">{cancellationDetail.note}</dd>
-                  </div>
-                )}
-              </dl>
-              {canRestoreThis && <CaseRestoreButton caseId={header.id} />}
-            </div>
-          ) : (
-            <CaseCancelDialog
-              caseId={header.id}
-              reasons={cancelReasons}
-              openStages={openStages}
-              openTasks={openTaskCount}
-              balance={current?.balance ?? null}
-            />
-          )}
+      {/* Cancellation detail — only when cancelled */}
+      {isCancelled && cancellationDetail && (
+        <section className="mb-4 rounded-card border border-error bg-error-bg p-4 shadow-card">
+          <h2 className="mb-2 text-xs font-bold text-error">اطلاعات لغو</h2>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            {cancellationDetail.date && (
+              <div className="flex gap-2">
+                <dt className="text-text-secondary">تاریخ لغو</dt>
+                <dd className="text-text" dir="ltr">
+                  {toPersianDigits(cancellationDetail.date)}
+                </dd>
+              </div>
+            )}
+            {cancellationDetail.reasonTitle && (
+              <div className="flex gap-2">
+                <dt className="text-text-secondary">دلیل لغو</dt>
+                <dd className="text-text">{cancellationDetail.reasonTitle}</dd>
+              </div>
+            )}
+            {cancellationDetail.cancelledByName && (
+              <div className="flex gap-2">
+                <dt className="text-text-secondary">لغوکننده</dt>
+                <dd className="text-text">{cancellationDetail.cancelledByName}</dd>
+              </div>
+            )}
+            {cancellationDetail.note && (
+              <div className="flex gap-2 sm:col-span-2">
+                <dt className="text-text-secondary">یادداشت</dt>
+                <dd className="text-text break-words">{cancellationDetail.note}</dd>
+              </div>
+            )}
+          </dl>
         </section>
       )}
 
+      {/* Two summary cards */}
       {current ? (
-        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <section className="rounded-card border border-border bg-card p-6 shadow-card">
-            <h2 className="mb-3 text-sm font-medium text-text-secondary">
-              {periodPathTitle(current.indexNumber)}
-            </h2>
-            <p className="text-2xl font-bold text-text" dir="ltr">
-              {toPersianDigits(`${header.progressPassed}/${header.progressTotal}`)}
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <section className="rounded-card border border-border bg-card p-5 shadow-card">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs text-text-secondary">
+                {periodPathTitle(current.indexNumber)}
+              </h2>
+              <span className="text-xs text-text-secondary" dir="ltr">
+                {toPersianDigits(`${header.progressPassed}/${header.progressTotal}`)}
+              </span>
+            </div>
+            <p className="mt-3 text-3xl font-bold text-text" dir="ltr">
+              {toPersianDigits(String(progressPercent))}
+              <span className="text-lg">٪</span>
             </p>
-            <p className="mt-1 text-sm text-text-secondary">مرحله طی‌شده</p>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-badge bg-page">
+              <div
+                className="h-full rounded-badge bg-primary transition-all"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-text-secondary">مرحله طی‌شده</p>
           </section>
+
           {canViewFin && (
-            <section className="rounded-card border border-border bg-card p-6 shadow-card">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-medium text-text-secondary">وضعیت مالی</h2>
+            <section className="rounded-card border border-border bg-card p-5 shadow-card">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-xs text-text-secondary">وضعیت مالی</h2>
                 {financeStatus && (
                   <span
-                    className={`rounded-badge px-2.5 py-0.5 text-xs ${PAYMENT_STATUS_BADGE[financeStatus]}`}
+                    className={`rounded-badge px-2 py-0.5 text-xs ${PAYMENT_STATUS_BADGE[financeStatus]}`}
                   >
                     {PAYMENT_STATUS_LABELS[financeStatus]}
                   </span>
                 )}
               </div>
-              <dl className="space-y-2 text-sm">
+              <dl className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-text-secondary">مبلغ کل</dt>
                   <dd className="text-text">{amountText(current.totalAmount)}</dd>
@@ -324,7 +349,7 @@ export default async function ManagerCaseDetailPage({
           )}
         </div>
       ) : (
-        <div className="mb-8 rounded-card border border-border bg-card p-8 text-center text-sm text-text-secondary shadow-card">
+        <div className="mb-6 rounded-card border border-border bg-card p-6 text-center text-sm text-text-secondary shadow-card">
           دورهٔ فعالی برای این پرونده ثبت نشده است.
         </div>
       )}

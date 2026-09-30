@@ -61,13 +61,6 @@ export async function createRegistrationPeriodTx(
 
 // --- Renewal (C-9) ----------------------------------------------------------
 
-/**
- * Renew a case on the caller's transaction (rule 4): close the previous period
- * (→ RENEWED) and create the next one (ACTIVE, indexNumber = previous + 1) with
- * the copied renewal-path stages, the first IN_PROGRESS (with startedAt) and the
- * rest PENDING. The reminder cycle is fresh automatically — SentReminder is keyed
- * by periodId, so the new period starts with no sent rows.
- */
 export async function renewPeriodTx(
   tx: Prisma.TransactionClient,
   input: RenewPeriodInput,
@@ -111,9 +104,6 @@ export async function renewPeriodTx(
   return period;
 }
 
-/** Set a period's lifecycle status (abandon → ABANDONED, restore → ACTIVE) on the
- *  caller's transaction (rule 4). C-10 manual controls; the engine reuses it in
- *  Phase 15. */
 export async function setPeriodStatusTx(
   tx: Prisma.TransactionClient,
   periodId: string,
@@ -122,7 +112,6 @@ export async function setPeriodStatusTx(
   await tx.period.update({ where: { id: periodId }, data: { status } });
 }
 
-/** The case's active period, for a renewal. */
 export async function findRenewablePeriod(caseId: string): Promise<{
   id: string;
   indexNumber: number;
@@ -136,8 +125,6 @@ export async function findRenewablePeriod(caseId: string): Promise<{
   });
 }
 
-/** A period's lifecycle facts (its owning case, status, follow-up status, expiry
- *  and index), for authorizing/validating a manual abandon or restore (C-10). */
 export async function findPeriodLifecycle(periodId: string): Promise<{
   caseId: string;
   status: string;
@@ -157,10 +144,6 @@ export async function findPeriodLifecycle(periodId: string): Promise<{
   });
 }
 
-/** The renewals work-queue (C-10): every ACTIVE / ABANDONED / RENEWED period of
- *  a non-cancelled case, with the joined display names + the payment amounts the
- *  balance is computed from (rule 2). The service classifies each row into a tab
- *  and computes days-remaining + the abandon-eligibility flag. */
 export type RenewalQueueRow = {
   id: string;
   indexNumber: number;
@@ -217,8 +200,6 @@ export async function findRenewalsQueue(): Promise<RenewalQueueRow[]> {
 
 // --- Engine seams (C-14 / Phase 15) -----------------------------------------
 
-/** An ACTIVE period of a non-cancelled case whose service has ≥1 active rule,
- *  with those rules and the customer's contact details, for renewal reminders. */
 export type ReminderCandidateRow = {
   id: string;
   expiryDate: Date | null;
@@ -269,8 +250,6 @@ export async function findReminderCandidates(): Promise<ReminderCandidateRow[]> 
   });
 }
 
-/** Move the given periods to ABANDONED in one statement (atomic). Returns the
- *  number of rows actually changed. */
 export async function abandonPeriods(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
   const res = await prisma.period.updateMany({
@@ -331,8 +310,6 @@ const PERIOD_SELECT = {
   payments: { select: { amount: true } },
 } satisfies Prisma.PeriodSelect;
 
-/** All periods of a case, newest first, with stages + payments for read-time
- *  computation of progress and balance (rule 2). */
 export async function findPeriodsByCase(
   caseId: string,
 ): Promise<PeriodWithDetail[]> {
@@ -345,8 +322,6 @@ export async function findPeriodsByCase(
 
 // --- Stage engine reads (C-6) ----------------------------------------------
 
-/** A stage's current state + its owning case id (Period.caseId — periods-owned;
- *  no Case-table join, rule 9). Null when the stage does not exist. */
 export async function findStageForAction(stageId: string): Promise<{
   periodId: string;
   caseId: string;
@@ -377,8 +352,6 @@ export async function findStageForAction(stageId: string): Promise<{
   };
 }
 
-/** A period's owning case id + status, for validating an "add exceptional
- *  stage" request against the current period. Null when it does not exist. */
 export async function findPeriodForAdd(
   periodId: string,
 ): Promise<{ caseId: string; status: string } | null> {
@@ -390,8 +363,6 @@ export async function findPeriodForAdd(
 
 // --- Financial seams (C-7) --------------------------------------------------
 
-/** A period's owning case id, for routing a payment/adjust-total request to the
- *  right case (authorization). Null when the period does not exist. */
 export async function findPeriodCase(
   periodId: string,
 ): Promise<{ caseId: string } | null> {
@@ -401,8 +372,6 @@ export async function findPeriodCase(
   });
 }
 
-/** Set a period's agreed total on the caller's transaction (rule 4). null clears
- *  it (the card then shows "—" for balance). Payments are untouched (C-7). */
 export async function setPeriodTotalTx(
   tx: Prisma.TransactionClient,
   periodId: string,
@@ -414,8 +383,6 @@ export async function setPeriodTotalTx(
   });
 }
 
-/** A case's active period (its follow-up status + status), for the record-result
- *  effect-on-renewal update (C-11 / B-6). Null when the case has no active period. */
 export async function findActivePeriod(
   caseId: string,
 ): Promise<{ id: string; followUpStatus: string; status: string } | null> {
@@ -426,8 +393,6 @@ export async function findActivePeriod(
   });
 }
 
-/** A case's current (highest-index) period regardless of status, for case
- *  restore (C-8). Null when the case has no period at all. */
 export async function findCurrentPeriod(
   caseId: string,
 ): Promise<{ id: string; indexNumber: number; status: string } | null> {
@@ -438,9 +403,6 @@ export async function findCurrentPeriod(
   });
 }
 
-/** Update a period's follow-up status (and optionally its status) on the caller's
- *  transaction (rule 4). Driven by the record-result effect-on-renewal mapping
- *  (B-6): "not interested" also moves the period to ABANDONED. */
 export async function setPeriodFollowUpTx(
   tx: Prisma.TransactionClient,
   periodId: string,
@@ -459,12 +421,6 @@ export async function setPeriodFollowUpTx(
 
 const OPEN_STATUSES = ["PENDING", "IN_PROGRESS", "REJECTED"];
 
-/**
- * Apply one C-6 status transition on the caller's transaction (rule 4). Done and
- * Not-Needed also advance the path: the first still-open stage by order that is
- * PENDING is auto-started (IN_PROGRESS + startedAt). Reject bumps the attempt
- * counter and keeps the stage open; Reopen clears the end time.
- */
 export async function applyStageActionTx(
   tx: Prisma.TransactionClient,
   args: ApplyStageActionArgs,
@@ -534,7 +490,6 @@ export async function applyStageActionTx(
   }
 }
 
-/** Append an exceptional stage to the end of a period's path (order = max + 1). */
 export async function addExceptionalStageTx(
   tx: Prisma.TransactionClient,
   args: AddExceptionalStageArgs,
@@ -556,8 +511,6 @@ export async function addExceptionalStageTx(
   });
 }
 
-/** Delete a stage (only a never-acted exceptional stage reaches here — the cases
- *  service enforces that rule). */
 export async function deleteStageTx(
   tx: Prisma.TransactionClient,
   stageId: string,
@@ -565,8 +518,6 @@ export async function deleteStageTx(
   await tx.caseStage.delete({ where: { id: stageId } });
 }
 
-/** Swap a stage's order with its neighbor toward the start ("up") or end
- *  ("down"). A no-op at the edge. */
 export async function moveStageTx(
   tx: Prisma.TransactionClient,
   args: MoveStageArgs,
@@ -587,4 +538,21 @@ export async function moveStageTx(
   const other = siblings[swapIdx];
   await tx.caseStage.update({ where: { id: stage.id }, data: { order: other.order } });
   await tx.caseStage.update({ where: { id: other.id }, data: { order: stage.order } });
+}
+
+// --- Stage engine: completion check -----------------------------------------
+
+/** Whether a period still has any open (non-closed) stage. Used by the cases
+ *  service to decide whether to flip Case.status to COMPLETED after a Done. */
+export async function periodHasOpenStages(
+  tx: Prisma.TransactionClient,
+  periodId: string,
+): Promise<boolean> {
+  const open = await tx.caseStage.count({
+    where: {
+      periodId,
+      status: { in: ["PENDING", "IN_PROGRESS", "REJECTED"] },
+    },
+  });
+  return open > 0;
 }

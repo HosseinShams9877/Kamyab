@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 // Isomorphic schema leaf import (documented client-component exception): the
@@ -12,9 +12,12 @@ import {
 } from "@/modules/employees/employees.schema";
 import type { DepartmentOption, EmployeeDetail } from "@/modules/employees/employees.types";
 import { ROLE_LABELS } from "../lib/permission-labels";
+import { PersianInput } from "@/components/ui/persian-input";
 
-// Create / edit an employee (C-12). The SAME Zod schema validates here and on the
-// server, so the browser gives fast feedback while the API stays the real gate.
+// Create / edit an employee (C-12). The SAME Zod schema validates here and on
+// the server, so the browser gives fast feedback while the API stays the real
+// gate. Numeric-identity fields (mobile) render through PersianInput: Persian
+// glyphs right-aligned, ASCII stored. Text fields are dir="rtl".
 
 type Props =
   | { mode: "create"; departments: DepartmentOption[] }
@@ -47,6 +50,7 @@ export function EmployeeForm(props: Props) {
     register,
     handleSubmit,
     setError,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema) as Resolver<FormValues>,
@@ -95,7 +99,6 @@ export function EmployeeForm(props: Props) {
         router.refresh();
         return;
       }
-      // Map a server field error (e.g. duplicate mobile) back onto the field.
       if (data.field === "mobile" || data.field === "departmentId") {
         setError(data.field, { message: data.message });
       } else {
@@ -121,33 +124,51 @@ export function EmployeeForm(props: Props) {
 
       <div>
         <label htmlFor="fullName" className={labelClass}>نام و نام خانوادگی</label>
-        <input id="fullName" type="text" className={inputClass} {...register("fullName")} />
+        <input
+          id="fullName"
+          type="text"
+          dir="rtl"
+          className={inputClass}
+          {...register("fullName")}
+        />
         {errors.fullName && <p className={errorClass}>{errors.fullName.message}</p>}
       </div>
 
       <div>
         <label htmlFor="mobile" className={labelClass}>شماره موبایل (نام کاربری)</label>
-        <input
-          id="mobile"
-          type="text"
-          inputMode="numeric"
-          dir="ltr"
-          placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-          className={`${inputClass} text-left`}
-          {...register("mobile")}
+        <Controller
+          name="mobile"
+          control={control}
+          render={({ field }) => (
+            <PersianInput
+              id="mobile"
+              dir="rtl"
+              inputMode="numeric"
+              placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+              className={`${inputClass} text-right`}
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
         />
         {errors.mobile && <p className={errorClass}>{errors.mobile.message}</p>}
       </div>
 
       <div>
         <label htmlFor="email" className={labelClass}>ایمیل (اختیاری)</label>
-        <input id="email" type="text" dir="ltr" className={`${inputClass} text-left`} {...register("email")} />
+        <input
+          id="email"
+          type="text"
+          dir="ltr"
+          className={`${inputClass} text-left`}
+          {...register("email")}
+        />
         {errors.email && <p className={errorClass}>{errors.email.message}</p>}
       </div>
 
       <div>
         <label htmlFor="departmentId" className={labelClass}>دپارتمان (اختیاری)</label>
-        <select id="departmentId" className={inputClass} {...register("departmentId")}>
+        <select id="departmentId" dir="rtl" className={inputClass} {...register("departmentId")}>
           <option value="">— بدون دپارتمان —</option>
           {departments.map((d) => (
             <option key={d.id} value={d.id}>{d.title}</option>
@@ -158,7 +179,7 @@ export function EmployeeForm(props: Props) {
 
       <div>
         <label htmlFor="role" className={labelClass}>نقش</label>
-        <select id="role" className={inputClass} {...register("role")}>
+        <select id="role" dir="rtl" className={inputClass} {...register("role")}>
           <option value="">— انتخاب نقش —</option>
           <option value="MANAGER">{ROLE_LABELS.MANAGER}</option>
           <option value="SUPERVISOR">{ROLE_LABELS.SUPERVISOR}</option>
@@ -170,7 +191,14 @@ export function EmployeeForm(props: Props) {
       {mode === "create" && (
         <div>
           <label htmlFor="password" className={labelClass}>رمز عبور اولیه</label>
-          <input id="password" type="password" dir="ltr" autoComplete="new-password" className={`${inputClass} text-left`} {...register("password")} />
+          <input
+            id="password"
+            type="password"
+            dir="ltr"
+            autoComplete="new-password"
+            className={`${inputClass} text-left`}
+            {...register("password")}
+          />
           {errors.password && <p className={errorClass}>{errors.password.message}</p>}
         </div>
       )}

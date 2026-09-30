@@ -15,12 +15,12 @@ import { toEnglishDigits } from "@/lib/digits";
 // the active period, optionally create the next task). Server re-checks authz.
 
 const field =
-  "min-h-[44px] w-full rounded-control border border-border bg-card px-3 text-sm text-text placeholder:text-text-secondary disabled:opacity-50";
+  "w-full rounded-control border border-border bg-card px-3 py-2.5 text-sm leading-relaxed text-text placeholder:text-text-secondary outline-none transition-colors focus:border-primary disabled:opacity-50";
 const primaryBtn =
-  "min-h-[44px] rounded-control bg-primary px-4 text-sm text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50";
+  "min-h-[44px] rounded-control bg-primary px-4 text-sm text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50";
 const ghostBtn =
-  "min-h-[44px] rounded-control border border-border px-4 text-sm text-text hover:bg-page disabled:cursor-not-allowed disabled:opacity-50";
-const labelCls = "mb-1 block text-xs text-text-secondary";
+  "min-h-[44px] rounded-control border border-border px-4 text-sm text-text transition-colors hover:bg-page disabled:cursor-not-allowed disabled:opacity-50";
+const labelCls = "mb-2 block text-sm font-medium text-text";
 
 function Req() {
   return <span className="text-error"> *</span>;
@@ -57,7 +57,6 @@ export function RecordResultDialog({
   async function submit() {
     setError(null);
 
-    // Validate with the shared Zod schema (same as the server).
     const parsed = recordResultSchema.safeParse({
       resultId,
       note,
@@ -100,11 +99,11 @@ export function RecordResultDialog({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-sm font-medium text-text">ثبت نتیجه پیگیری</h2>
+          <h2 className="text-base font-bold text-text">ثبت نتیجه پیگیری</h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-control text-text-secondary hover:bg-page"
+            className="flex h-8 w-8 items-center justify-center rounded-control text-text-secondary transition-colors hover:bg-page"
             aria-label="بستن"
           >
             ✕
@@ -112,7 +111,7 @@ export function RecordResultDialog({
         </div>
 
         {/* Body */}
-        <div className="space-y-3 p-5">
+        <div className="space-y-5 p-5">
           {error && (
             <p className="rounded-control bg-error-bg px-3 py-2 text-sm text-error">
               {error}
@@ -136,12 +135,13 @@ export function RecordResultDialog({
           <div>
             <label className={labelCls}>توضیحات</label>
             <textarea
-              rows={3}
+              rows={4}
               maxLength={500}
+              dir="rtl"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               disabled={working}
-              className={field}
+              className={`${field} resize-none`}
             />
           </div>
 
@@ -157,12 +157,13 @@ export function RecordResultDialog({
           </label>
 
           {nextTask && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelCls}>عنوان کار بعدی</label>
                 <input
                   type="text"
                   maxLength={150}
+                  dir="rtl"
                   placeholder={taskTitle}
                   value={nextTitle}
                   onChange={(e) => setNextTitle(e.target.value)}
@@ -178,14 +179,14 @@ export function RecordResultDialog({
                 <JalaliDatePicker
                   value={nextDueDate}
                   onChange={setNextDueDate}
-                  placeholder="۱۴۰۳/۰۵/۰۱"
+                  placeholder="۱۴۰۵/۰۷/۰۱"
                 />
               </div>
             </div>
           )}
 
-          <div className="rounded-control bg-info-bg px-3 py-2 text-xs text-info">
-            ⚠ نتایج مرتبط با تمدید (موافق/مخالف تمدید) وضعیت پیگیری تمدید پرونده را هم به‌روزرسانی می‌کنند.
+          <div className="rounded-control bg-info-bg px-4 py-3 text-xs leading-relaxed text-info">
+            نتایج مرتبط با تمدید (موافق یا مخالف تمدید) وضعیت پیگیری تمدید پرونده را هم به‌روزرسانی می‌کنند.
           </div>
         </div>
 
