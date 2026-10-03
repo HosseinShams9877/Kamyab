@@ -17,11 +17,9 @@ type Props = {
   onChange: (value: string) => void;
   options: SearchableOption[];
   placeholder?: string;
-  emptyLabel?: string; // shown as the first option (empty value)
+  emptyLabel?: string;
   disabled?: boolean;
-  /** Normalize the query before matching (e.g. Persian → English digits). */
   normalizeQuery?: (q: string) => string;
-  /** Show the query input with Persian digits + LTR layout. */
   numericDisplay?: boolean;
 };
 
@@ -98,79 +96,128 @@ export function SearchableSelect({
 
   return (
     <div ref={rootRef} className="relative">
+      {/* Trigger button — clearly a control: bordered, tinted background, hover glow. */}
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={onKeyDown}
-        className="flex w-full items-center justify-between gap-2 rounded-control border border-border bg-card px-3 py-2 text-right text-sm text-text outline-none transition-colors focus:border-primary disabled:opacity-50"
+        className={`flex w-full items-center justify-between gap-2 rounded-control border px-3 py-2 text-right text-sm outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+          open
+            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+            : "border-border bg-page/50 hover:border-primary/50 hover:bg-primary/10"
+        }`}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={selected ? "text-text" : "text-text-secondary"}>
+        <span className={selected ? "text-text font-medium" : "text-text-secondary"}>
           {selected ? selected.label : placeholder}
         </span>
-        <span className="text-text-secondary">▾</span>
+        {/* Chevron icon, rotates when open. */}
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className={`shrink-0 transition-transform duration-150 ${
+            open ? "rotate-180 text-primary" : "text-text-secondary"
+          }`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full rounded-card border border-border bg-card shadow-card">
-          <div className="border-b border-border p-2">
-            <input
-              autoFocus
-              type="text"
-              dir={numericDisplay ? "ltr" : "rtl"}
-              value={numericDisplay ? toPersianDigits(query) : query}
-              onChange={(e) =>
-                setQuery(
-                  numericDisplay
-                    ? toEnglishDigits(e.target.value)
-                    : e.target.value,
-                )
-              }
-              onKeyDown={onKeyDown}
-              placeholder="جستجو…"
-              className={`w-full rounded-control border border-border bg-page px-2 py-1.5 text-sm text-text outline-none focus:border-primary ${
-                numericDisplay ? "text-left" : ""
-              }`}
-            />
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-card border border-primary/30 bg-card shadow-card">
+          {/* Search input with a magnifier icon, on a subtly tinted strip. */}
+          <div className="border-b border-primary/20 bg-primary/5 p-2">
+            <div className="relative">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-primary"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                autoFocus
+                type="text"
+                dir={numericDisplay ? "ltr" : "rtl"}
+                value={numericDisplay ? toPersianDigits(query) : query}
+                onChange={(e) =>
+                  setQuery(
+                    numericDisplay
+                      ? toEnglishDigits(e.target.value)
+                      : e.target.value,
+                  )
+                }
+                onKeyDown={onKeyDown}
+                placeholder="جستجو…"
+                className={`w-full rounded-control border border-border bg-card py-1.5 pr-8 pl-2 text-sm text-text outline-none transition-colors focus:border-primary ${
+                  numericDisplay ? "text-left pl-8 pr-2" : ""
+                }`}
+              />
+            </div>
           </div>
+
+          {/* Options list. */}
           <ul role="listbox" className="max-h-60 overflow-y-auto p-1">
             {emptyLabel && (
               <li>
                 <button
                   type="button"
                   onClick={() => pick("")}
-                  className={`w-full rounded-control px-3 py-2 text-right text-sm ${
+                  className={`flex w-full items-center justify-between rounded-control px-3 py-2 text-right text-sm transition-colors ${
                     value === ""
-                      ? "bg-page text-text"
-                      : "text-text-secondary hover:bg-page"
+                      ? "bg-primary/20 font-medium text-primary"
+                      : "text-text-secondary hover:bg-primary/15 hover:text-primary"
                   }`}
                 >
-                  {emptyLabel}
+                  <span>{emptyLabel}</span>
+                  {value === "" && <CheckIcon />}
                 </button>
               </li>
             )}
-            {filtered.map((o, i) => (
-              <li key={o.value}>
-                <button
-                  type="button"
-                  onClick={() => pick(o.value)}
-                  onMouseEnter={() => setHighlight(i)}
-                  className={`w-full rounded-control px-3 py-2 text-right text-sm ${
-                    o.value === value
-                      ? "bg-page text-primary"
-                      : i === highlight
-                        ? "bg-page text-text"
-                        : "text-text hover:bg-page"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              </li>
-            ))}
+
+            {filtered.map((o, i) => {
+              const isSelected = o.value === value;
+              const isHighlighted = i === highlight;
+              return (
+                <li key={o.value}>
+                  <button
+                    type="button"
+                    onClick={() => pick(o.value)}
+                    onMouseEnter={() => setHighlight(i)}
+                    className={`flex w-full items-center justify-between gap-2 rounded-control px-3 py-2 text-right text-sm transition-colors ${
+                      isSelected
+                        ? "bg-primary/20 font-medium text-primary"
+                        : isHighlighted
+                          ? "bg-primary/15 text-primary"
+                          : "text-text hover:bg-primary/15 hover:text-primary"
+                    }`}
+                  >
+                    <span className="truncate">{o.label}</span>
+                    {isSelected && <CheckIcon />}
+                  </button>
+                </li>
+              );
+            })}
+
             {filtered.length === 0 && (
-              <li className="px-3 py-2 text-center text-sm text-text-secondary">
+              <li className="px-3 py-6 text-center text-sm text-text-secondary">
                 موردی یافت نشد.
               </li>
             )}
@@ -178,5 +225,25 @@ export function SearchableSelect({
         </div>
       )}
     </div>
+  );
+}
+
+/** A small tick shown next to the selected option. */
+function CheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 }
