@@ -23,7 +23,7 @@ import {
 } from "@/modules/cases";
 import { periodPathTitle, PeriodsPanel } from "@/modules/periods";
 import { listActiveCancellationReasons } from "@/modules/settings";
-import { countOpenTasksForCase } from "@/modules/tasks";
+import { countOpenTasksForCase, getTaskFormData, TaskForm } from "@/modules/tasks";
 import {
   getCaseFinancial,
   canViewFinancial,
@@ -111,6 +111,21 @@ export default async function ManagerCaseDetailPage({
 
   const followUps = await listCaseFollowUps(header.id);
   const tasksPanel = <FollowUpTimeline key="tasks" followUps={followUps} />;
+
+  // The task-create form, composed here with this case's presets. Composed only
+  // when the user may create tasks — a slot the server never builds is a slot the
+  // client can never open.
+  const canCreateTask = can(user, "tasks.create");
+  const taskFormData = canCreateTask ? await getTaskFormData(user) : null;
+  const taskForm =
+    canCreateTask && taskFormData ? (
+      <TaskForm
+        key="new-task"
+        data={taskFormData}
+        defaultCaseId={header.id}
+        defaultCustomerId={header.customerId}
+      />
+    ) : null;
 
   const canRenew = canRegisterRenewal(user, header.ownerId);
   const canRecordRenewalFu = canRecordRenewalFollowUp(user, header.ownerId);
@@ -358,10 +373,12 @@ export default async function ManagerCaseDetailPage({
         current={current}
         canEdit={canEdit}
         canAddStage={canAddStage}
+        canCreateTask={canCreateTask}
         isCancelled={isCancelled}
         periodsPanel={periodsPanel}
         paymentsPanel={paymentsPanel}
         tasksPanel={tasksPanel}
+        taskForm={taskForm}
       />
     </main>
   );
