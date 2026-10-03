@@ -23,3 +23,11 @@ export function toEnglishDigits(input: string): string {
   }
   return out;
 }
+/** Format an ASCII number string with 3-digit separators (commas). Non-digits
+ *  are stripped first so paste-in values like "1,000,000" work correctly.
+ *  Returns "" for empty/whitespace. */
+export function formatThousands(digits: string): string {
+  const clean = toEnglishDigits(digits).replace(/[^\d]/g, "");
+  if (!clean) return "";
+  return clean.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}

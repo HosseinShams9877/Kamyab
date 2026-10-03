@@ -6,6 +6,8 @@ import { toPersianDigits, toEnglishDigits } from "@/lib/digits";
 import { parseJalali, addMonths, formatJalali } from "@/lib/jalali";
 // Isomorphic leaf imports (client-component exception): never the periods barrel.
 import type { RenewalMeta } from "../periods.types";
+import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
+import { PersianInput } from "@/components/ui/persian-input";
 
 // The renewal form (C-9), embedded in the active period's card. Start date
 // defaults to the current period's expiry (the new span begins where the old one
@@ -21,7 +23,7 @@ const primaryBtn =
   "min-h-[44px] rounded-control bg-primary px-4 text-sm text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50";
 const ghostBtn =
   "min-h-[44px] rounded-control border border-border px-4 text-sm text-text hover:bg-page disabled:cursor-not-allowed disabled:opacity-50";
-const label = "mb-1 block text-xs text-text-secondary";
+const label = "mb-1.5 block text-sm font-medium text-text";
 
 export function RenewalForm({
   caseId,
@@ -45,8 +47,7 @@ export function RenewalForm({
 
   const working = busy || pending;
 
-  // Live expiry preview: the same calendar-month add the server applies. Empty
-  // until both a valid start date and a duration are chosen.
+  // Live expiry preview: the same calendar-month add the server applies.
   const duration = meta.durations.find((d) => d.id === durationId) ?? null;
   const startJ = parseJalali(toEnglishDigits(startDate.trim()));
   const computedExpiry =
@@ -92,24 +93,19 @@ export function RenewalForm({
           {error}
         </p>
       )}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className={label} htmlFor="rnw-start">تاریخ شروع دورهٔ جدید</label>
-          <input
-            id="rnw-start"
-            type="text"
-            dir="ltr"
-            placeholder="۱۴۰۴/۰۵/۰۱"
+          <label className={label}>تاریخ شروع دورهٔ جدید</label>
+          <JalaliDatePicker
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            disabled={working}
-            className={field}
+            onChange={setStartDate}
           />
         </div>
         <div>
           <label className={label} htmlFor="rnw-duration">مدت اعتبار</label>
           <select
             id="rnw-duration"
+            dir="rtl"
             value={durationId}
             onChange={(e) => setDurationId(e.target.value)}
             disabled={working || meta.durations.length === 0}
@@ -129,20 +125,21 @@ export function RenewalForm({
             dir="ltr"
             readOnly
             value={computedExpiry ? toPersianDigits(computedExpiry) : "—"}
-            className={`${field} bg-disabled-bg`}
+            className={`${field} bg-page text-left text-text-secondary`}
           />
         </div>
         <div>
           <label className={label} htmlFor="rnw-amount">مبلغ تمدید (تومان، اختیاری)</label>
-          <input
+          <PersianInput
             id="rnw-amount"
-            type="text"
             inputMode="numeric"
-            dir="ltr"
+            dir="rtl"
+            thousandSeparator
+            placeholder="۱,۰۰۰,۰۰۰"
+            className={`${field} text-right`}
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={setAmount}
             disabled={working}
-            className={field}
           />
         </div>
         <div className="sm:col-span-2">
@@ -151,6 +148,7 @@ export function RenewalForm({
             id="rnw-note"
             type="text"
             maxLength={300}
+            dir="rtl"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             disabled={working}
@@ -158,7 +156,7 @@ export function RenewalForm({
           />
         </div>
       </div>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-4 flex gap-2">
         <button
           type="button"
           onClick={submit}

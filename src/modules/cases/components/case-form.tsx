@@ -305,20 +305,22 @@ export function CaseForm({
         <label htmlFor="totalAmount" className={labelClass}>
           مبلغ کل به تومان (اختیاری)
         </label>
-        <Controller
-          name="totalAmount"
-          control={control}
-          render={({ field }) => (
-            <PersianInput
-              id="totalAmount"
-              dir="ltr"
-              inputMode="numeric"
-              className={`${inputClass} text-right`}
-              value={field.value}
-              onChange={field.onChange}
-            />
-          )}
-        />
+       <Controller
+  name="totalAmount"
+  control={control}
+  render={({ field }) => (
+    <PersianInput
+      id="totalAmount"
+      dir="rtl"
+      inputMode="numeric"
+      thousandSeparator
+      placeholder="۱,۰۰۰,۰۰۰"
+      className={`${inputClass} text-right`}
+      value={field.value}
+      onChange={field.onChange}
+    />
+  )}
+/>
         {errors.totalAmount && <p className={errorClass}>{errors.totalAmount.message}</p>}
       </div>
 

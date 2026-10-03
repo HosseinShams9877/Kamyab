@@ -149,7 +149,8 @@ export function FinancialPanel({
                 id="pay-amount"
                 inputMode="numeric"
                 dir="rtl"
-                placeholder="0"
+                thousandSeparator
+                placeholder="۱,۰۰۰,۰۰۰"
                 className={`${field} text-right`}
                 value={amount}
                 onChange={setAmount}
@@ -270,7 +271,8 @@ export function FinancialPanel({
                 id="adj-total"
                 inputMode="numeric"
                 dir="rtl"
-                placeholder="0"
+                thousandSeparator
+                placeholder="۱,۰۰۰,۰۰۰"
                 className={`${field} text-right`}
                 value={totalAmount}
                 onChange={setTotalAmount}
