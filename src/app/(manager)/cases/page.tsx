@@ -142,6 +142,8 @@ export default async function CasesPage({
         pageCount={result.pageCount}
         total={result.total}
         buildPageHref={pageHref}
+              
+        basePath="/cases"
       />
     </main>
   );

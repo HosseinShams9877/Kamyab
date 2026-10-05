@@ -31,6 +31,8 @@ type Props = {
   showOwnerFilter?: boolean;
   /** Detail-route prefix for the "جزئیات" link (no trailing slash). */
   detailBasePath?: string;
+    basePath?: string;
+
 };
 
 const inputClass =
@@ -56,14 +58,17 @@ export function CasesTable({
   buildPageHref,
   showOwnerFilter = true,
   detailBasePath = "/cases",
+  basePath
 }: Props) {
+    const formAction = basePath ?? detailBasePath;
+
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
       {/* Filter bar — submits to the current URL, so it works in both the
           manager /cases and the employee /employee/cases page. */}
       <form
         method="get"
-        action="."
+        action={formAction}
         className="grid grid-cols-1 gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-5"
       >
         <div className="sm:col-span-2">

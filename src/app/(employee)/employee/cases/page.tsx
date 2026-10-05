@@ -120,6 +120,7 @@ export default async function EmployeeCasesPage({
         total={result.total}
         buildPageHref={pageHref}
         showOwnerFilter={false}
+        basePath="/employee/cases"
         detailBasePath="/employee/cases"
       />
     </main>
