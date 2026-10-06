@@ -1,11 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { toJalali, parseJalali, toGregorianDate } from "@/lib/jalali";
 import type { AudienceFilter } from "./campaigns.types";
 
-// ALL Prisma access for the campaigns domain. Cross-module reads (customers,
-// services, employees) go through the service layer.
+// ALL Prisma access for the campaigns domain.
 
-/** Insert a new campaign. */
 export function createCampaign(data: {
   name: string;
   channel: string;
@@ -19,7 +18,6 @@ export function createCampaign(data: {
   return prisma.campaign.create({ data, select: { id: true } });
 }
 
-/** A campaign's core row for auth + status decisions. */
 export function findCampaignCore(id: string) {
   return prisma.campaign.findUnique({
     where: { id },
@@ -37,7 +35,6 @@ export function findCampaignCore(id: string) {
   });
 }
 
-/** A paginated list of campaigns, newest first. */
 export async function listCampaigns(
   where: Prisma.CampaignWhereInput,
   opts: { skip?: number; take?: number } = {},
@@ -66,7 +63,6 @@ export async function listCampaigns(
   return { rows, total };
 }
 
-/** A single campaign with recipients (for the detail page). */
 export function findCampaignDetail(id: string) {
   return prisma.campaign.findUnique({
     where: { id },
@@ -101,24 +97,32 @@ export function findCampaignDetail(id: string) {
   });
 }
 
-/** Resolve an audience filter into a Customer[] using the filter's rules. */
+/**
+ * Resolve an audience filter into a Customer[].
+ * Prisma-expressible filters (type, city, serviceIds, hasActiveCase) run in the
+ * DB. The rest (joinedAfter, hasBalance, birthdayMonth) run in-memory after the
+ * fetch — acceptable at the institute's scale.
+ */
 export async function resolveAudience(filter: AudienceFilter) {
   const where: Prisma.CustomerWhereInput = { status: true };
 
   if (filter.customerType) where.type = filter.customerType;
   if (filter.city) where.city = { contains: filter.city };
 
+  // Build the case-level constraint from an array of AND conditions so we never
+  // overwrite `where.cases` when both filters apply.
+  const caseConditions: Prisma.CaseWhereInput[] = [];
   if (filter.serviceIds && filter.serviceIds.length > 0) {
-    where.cases = { some: { serviceId: { in: filter.serviceIds } } };
+    caseConditions.push({ serviceId: { in: filter.serviceIds } });
   }
-
   if (filter.hasActiveCase) {
-    where.cases = {
-      some: { status: { in: ["NEW", "IN_PROGRESS"] } },
-    };
+    caseConditions.push({ status: { in: ["NEW", "IN_PROGRESS"] } });
+  }
+  if (caseConditions.length > 0) {
+    where.cases = { some: { AND: caseConditions } };
   }
 
-  return prisma.customer.findMany({
+  const rows = await prisma.customer.findMany({
     where,
     orderBy: { createdAt: "desc" },
     select: {
@@ -127,6 +131,9 @@ export async function resolveAudience(filter: AudienceFilter) {
       fullName: true,
       companyName: true,
       mobile: true,
+      birthDate: true,
+      foundingDate: true,
+      createdAt: true,
       cases: {
         where: { status: { in: ["NEW", "IN_PROGRESS"] } },
         select: {
@@ -140,9 +147,48 @@ export async function resolveAudience(filter: AudienceFilter) {
       },
     },
   });
+
+  return rows.filter((c) => {
+    // joinedAfter: Customer.createdAt >= that Jalali date.
+    if (filter.joinedAfter) {
+      const j = parseJalali(filter.joinedAfter);
+      if (j) {
+        const from = toGregorianDate(j);
+        if (c.createdAt < from) return false;
+      }
+    }
+
+    // hasBalance: sum(totalAmount) - sum(payments) > 0 across active periods.
+    if (filter.hasBalance) {
+      let totalSum = 0;
+      let paidSum = 0;
+      let anyTotal = false;
+      for (const cs of c.cases) {
+        for (const p of cs.periods) {
+          if (p.totalAmount !== null) {
+            anyTotal = true;
+            totalSum += Number(p.totalAmount);
+          }
+          for (const pay of p.payments) paidSum += Number(pay.amount);
+        }
+      }
+      const balance = anyTotal ? totalSum - paidSum : 0;
+      if (balance <= 0) return false;
+    }
+
+    // birthdayMonth: the Jalali month of the customer's birthDate (natural) or
+    // foundingDate (legal) matches the requested month.
+    if (filter.birthdayMonth) {
+      const d = c.birthDate ?? c.foundingDate;
+      if (!d) return false;
+      const j = toJalali(d);
+      if (j.jm !== filter.birthdayMonth) return false;
+    }
+
+    return true;
+  });
 }
 
-/** Bulk-insert recipients. Skips duplicates via unique constraint — idempotent. */
 export async function createRecipients(
   campaignId: string,
   rows: { customerId: string; mobile: string }[],
@@ -160,7 +206,6 @@ export async function createRecipients(
   return { count: res.count };
 }
 
-/** Queued recipients of a campaign (for the send phase). */
 export function listQueuedRecipients(campaignId: string) {
   return prisma.campaignRecipient.findMany({
     where: { campaignId, status: "QUEUED" },
@@ -221,7 +266,6 @@ export function markRecipientSkipped(id: string, reason: string) {
   });
 }
 
-/** Recipient counts grouped by status for a campaign. */
 export async function countRecipientsByStatus(campaignId: string) {
   const rows = await prisma.campaignRecipient.groupBy({
     by: ["status"],
@@ -233,7 +277,6 @@ export async function countRecipientsByStatus(campaignId: string) {
   return out;
 }
 
-/** All scheduled/running campaigns whose scheduledAt has come. */
 export function findDueCampaigns(now: Date) {
   return prisma.campaign.findMany({
     where: {
