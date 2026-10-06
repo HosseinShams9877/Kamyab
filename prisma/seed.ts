@@ -83,6 +83,7 @@ const smsTemplates: { eventKey: string; body: string }[] = [
     eventKey: "birthday_legal",
     body: "{companyName} گرامی، سالروز تأسیس مجموعه‌تان را تبریک می‌گوییم. {instituteName}",
   },
+  { eventKey: "campaign_general", body: "سلام {customerName}، {instituteName} در خدمت شماست." },
 ];
 
 async function seedLookup(

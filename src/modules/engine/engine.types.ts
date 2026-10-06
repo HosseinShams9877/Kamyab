@@ -21,11 +21,11 @@ export type ReminderCandidate = {
   periodId: string;
   caseNumber: string;
   ownerId: string;
-  daysRemaining: number | null; // computed upstream from the stored expiry (rule 2)
-  expiryJalali: string | null; // ASCII "YYYY/MM/DD" for the SMS body
+  daysRemaining: number | null;
+  expiryJalali: string | null;
   serviceName: string;
   customer: {
-    type: string; // NATURAL | LEGAL
+    type: string;
     fullName: string | null;
     companyName: string | null;
     mobile: string;
@@ -33,15 +33,14 @@ export type ReminderCandidate = {
   rules: ReminderRuleView[];
 };
 
-/** A fully-resolved reminder ready to persist: recipients + text already decided,
- *  so the repository only writes rows and never composes Persian. */
+/** A fully-resolved reminder ready to persist. */
 export type ReminderIntent = {
   periodId: string;
   ruleId: string;
   channel: string;
-  userIds: string[]; // INTERNAL_NOTIFICATION targets (empty for SMS)
+  userIds: string[];
   notificationMessage: string;
-  smsRecipient: string | null; // SMS_TO_CUSTOMER only
+  smsRecipient: string | null;
   smsBody: string | null;
   templateKey: string;
 };
@@ -60,18 +59,18 @@ export type UnfollowedRenewal = {
 /** A greeting-eligible customer with their birth/founding date as Jalali parts. */
 export type GreetingCandidate = {
   customerId: string;
-  type: string; // NATURAL | LEGAL
+  type: string;
   fullName: string | null;
   companyName: string | null;
   mobile: string;
-  birth: { jy: number; jm: number; jd: number } | null; // null = no dated info
+  birth: { jy: number; jm: number; jd: number } | null;
 };
 
-/** A resolved birthday greeting ready to persist (BirthdayLog + queued SMS). */
+/** A resolved birthday greeting ready to persist. */
 export type GreetingIntent = {
   customerId: string;
-  year: number; // Jalali year — the BirthdayLog unique key (once per year)
-  templateKey: string; // birthday_natural | birthday_legal
+  year: number;
+  templateKey: string;
   smsRecipient: string;
   smsBody: string;
 };
@@ -80,25 +79,23 @@ export type GreetingIntent = {
 export type QueuedSms = { id: string; recipient: string; body: string };
 
 /** A managerial/owner alert to create only if an identical-subject one is absent
- *  within the last 24h (the anti-repeat window keys on `dedupePrefix`). */
+ *  within the last 24h. */
 export type AlertIntent = {
   userIds: string[];
   message: string;
-  dedupePrefix: string; // stable per-subject text (never varies with the count)
+  dedupePrefix: string;
 };
 
 /** Settings + rendered-template inputs the orchestrator needs, read once per run. */
 export type EngineConfig = {
   instituteName: string;
-  archiveDays: number; // tasks closed more than this many days ago are archived
+  archiveDays: number;
   birthday: { enabled: boolean; sendHour: number };
-  realSend: boolean; // when false, SMS is queued + recorded but never sent
-  templates: Record<string, string>; // eventKey -> body
+  realSend: boolean;
+  templates: Record<string, string>;
 };
 
-/** The tallies of one run, written to EngineRunLog. `overdueAlerts` /
- *  `unfollowedAlerts` / `errorDetails` land in the log's `detail` JSON (the table
- *  has no column for them) so the /engine page can still surface them. */
+/** The tallies of one run, written to EngineRunLog. */
 export type EngineRunResult = {
   reminders: number;
   archived: number;
@@ -109,14 +106,12 @@ export type EngineRunResult = {
   overdueAlerts: number;
   unfollowedAlerts: number;
   errorDetails: string[];
+  campaignsProcessed: number;
+  campaignsSent: number;
 };
 
 /**
- * The seam executeEngine drives. Every side-effect is a method here; the pure
- * orchestrator only decides. `dispatchReminder` / `dispatchGreeting` return false
- * when the unique index already has the row (a made-up or re-run dispatch), which
- * is exactly how "once per period" / "once per year" is guaranteed — never by a
- * re-check in the orchestrator.
+ * The seam executeEngine drives.
  */
 export interface EnginePorts {
   readonly config: EngineConfig;
@@ -124,13 +119,13 @@ export interface EnginePorts {
 
   // Task 1 — renewal reminders.
   listReminderCandidates(): Promise<ReminderCandidate[]>;
-  dispatchReminder(intent: ReminderIntent): Promise<boolean>; // false = already sent
+  dispatchReminder(intent: ReminderIntent): Promise<boolean>;
 
-  // Task 2 — overdue-task alerts to managers (24h anti-repeat).
+  // Task 2 — overdue-task alerts to managers.
   listOverdueOwners(): Promise<OverdueOwner[]>;
-  createAlertIfAbsent(intent: AlertIntent): Promise<number>; // # notifications created
+  createAlertIfAbsent(intent: AlertIntent): Promise<number>;
 
-  // Task 3 — uncontacted near-expiry renewals nudge the owner (24h anti-repeat).
+  // Task 3 — uncontacted near-expiry renewals nudge the owner.
   listUnfollowedRenewals(): Promise<UnfollowedRenewal[]>;
 
   // Task 4 — archive long-closed tasks.
@@ -139,11 +134,19 @@ export interface EnginePorts {
   // Task 5 — abandon expired, un-renewed periods.
   abandonExpiredPeriods(): Promise<number>;
 
-  // Task 6 — birthday / founding-day greetings (once per year).
+  // Task 6 — birthday / founding-day greetings.
   listGreetingCandidates(): Promise<GreetingCandidate[]>;
-  dispatchGreeting(intent: GreetingIntent): Promise<boolean>; // false = already greeted
+  dispatchGreeting(intent: GreetingIntent): Promise<boolean>;
 
-  // Task 7 — process the SMS queue (only when real sending is on).
+  // Task 6b — due campaigns.
+  runCampaigns(now: Date): Promise<{
+    campaignsProcessed: number;
+    campaignsCompleted: number;
+    sent: number;
+    failed: number;
+  }>;
+
+  // Task 7 — process the SMS queue.
   listQueuedSms(): Promise<QueuedSms[]>;
   sendSms(msg: { recipient: string; body: string }): Promise<{ ok: boolean; error?: string }>;
   markSmsSent(id: string): Promise<void>;
@@ -154,12 +157,9 @@ export interface EnginePorts {
 }
 
 // ---------------------------------------------------------------------------
-// SMS log (C-14): a read-only view of the most recent SmsMessage rows, so a
-// manager can see WHY a run's messages failed without leaving the engine page.
-// Kept inside the engine module (no cross-module dependency on settings).
+// SMS log (C-14)
 // ---------------------------------------------------------------------------
 
-/** One recent SMS message of any status, as shown in the engine page's log. */
 export type SmsLogRow = {
   id: string;
   recipient: string;
@@ -171,7 +171,6 @@ export type SmsLogRow = {
   sentAt: Date | null;
 };
 
-/** The full SMS log view: per-status counts + the recent rows. */
 export type SmsLogView = {
   sent: number;
   queued: number;

@@ -53,6 +53,12 @@ export const PERMISSION_KEYS = [
   "renewals.record_followup",
   "renewals.register",
   "renewals.restore",
+  // Campaigns
+  "campaigns.view",
+  "campaigns.create",
+  "campaigns.edit",
+  "campaigns.send",
+  "campaigns.cancel",
   // Services
   "services.view",
   "services.edit",
@@ -126,6 +132,8 @@ const EMPLOYEE_DEFAULTS: PermissionMap = mapWithTrue([
   "renewals.view",
   "renewals.record_followup",
   "services.view",
+   "campaigns.view",
+
 ]);
 
 export const ROLE_DEFAULTS: Record<Role, PermissionMap> = {

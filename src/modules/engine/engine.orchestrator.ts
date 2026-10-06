@@ -21,27 +21,10 @@ import type {
   ReminderIntent,
 } from "./engine.types";
 
-// The pure heart of the automatic engine (C-14). executeEngine runs the seven
-// scheduled tasks against the injected EnginePorts and returns the run's tallies.
-// It has NO Prisma and NO module-barrel imports — only the pure guards/text
-// (engine.guards), the isomorphic template renderer, and the Jalali/digit leaves
-// — so the "run twice, no duplicates" proof (engine.orchestrator.test) drives it
-// with an in-memory fake that models the two DB unique indexes. Every decision
-// lives here; every side-effect is a port method. The "once per period / once per
-// year" guarantee is NOT re-checked here: dispatchReminder / dispatchGreeting
-// return false when the unique index already holds the row, and the orchestrator
-// simply does not count a false as a fresh dispatch.
+// The pure heart of the automatic engine (C-14).
 
-/** The 24-hour window for managerial anti-repeat alerts, in milliseconds. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Run the whole engine once. Each task is isolated in its own try/catch so a
- * failure in one (a bad row, a provider hiccup) is recorded and the rest still
- * run; the tallies — including per-task error details — are persisted via
- * writeRunLog before the result is returned, so every run is logged (rule: the
- * /engine page always has the run to show).
- */
 export async function executeEngine(ports: EnginePorts, now: Date): Promise<EngineRunResult> {
   const result: EngineRunResult = {
     reminders: 0,
@@ -53,9 +36,10 @@ export async function executeEngine(ports: EnginePorts, now: Date): Promise<Engi
     overdueAlerts: 0,
     unfollowedAlerts: 0,
     errorDetails: [],
+    campaignsProcessed: 0,
+    campaignsSent: 0,
   };
 
-  /** Run one task, folding any throw into the error tally instead of aborting. */
   const runTask = async (label: string, fn: () => Promise<void>): Promise<void> => {
     try {
       await fn();
@@ -72,12 +56,11 @@ export async function executeEngine(ports: EnginePorts, now: Date): Promise<Engi
   await runTask("reminders", async () => {
     const candidates = await ports.listReminderCandidates();
     for (const candidate of candidates) {
-      if (candidate.daysRemaining === null) continue; // no expiry ⇒ nothing to time
+      if (candidate.daysRemaining === null) continue;
       for (const rule of candidate.rules) {
         if (!isReminderDue(candidate.daysRemaining, rule.daysBefore)) continue;
         const intent = buildReminderIntent(candidate, rule, managerIds, config, now);
-        if (!intent) continue; // no resolvable recipient (e.g. CUSTOMER on a notification)
-        // false ⇒ the SentReminder unique index already holds this row → not fresh.
+        if (!intent) continue;
         if (await ports.dispatchReminder(intent)) result.reminders += 1;
       }
     }
@@ -125,7 +108,6 @@ export async function executeEngine(ports: EnginePorts, now: Date): Promise<Engi
 
   // --- Task 6: birthday / founding-day greetings (once per year) -----------
   await runTask("greetings", async () => {
-    // Once a day, at (or after) the configured hour — never four times a day.
     if (!config.birthday.enabled) return;
     if (now.getHours() < config.birthday.sendHour) return;
     const today = toJalali(now);
@@ -135,14 +117,20 @@ export async function executeEngine(ports: EnginePorts, now: Date): Promise<Engi
       if (!isBirthdayToday(candidate.birth, today)) continue;
       if (!candidate.mobile) continue;
       const intent = buildGreetingIntent(candidate, today.jy, config);
-      // false ⇒ the BirthdayLog unique index already holds this year → not fresh.
       if (await ports.dispatchGreeting(intent)) result.greetings += 1;
     }
   });
 
+  // --- Task 6b: due campaigns ----------------------------------------------
+  await runTask("campaigns", async () => {
+    const r = await ports.runCampaigns(now);
+    result.campaignsProcessed = r.campaignsProcessed;
+    result.campaignsSent = r.sent;
+  });
+
   // --- Task 7: process the SMS queue (only when real sending is on) --------
   await runTask("sms", async () => {
-    if (!config.realSend) return; // off ⇒ built + recorded (QUEUED) but never sent
+    if (!config.realSend) return;
     const queued = await ports.listQueuedSms();
     for (const msg of queued) {
       const sent = await ports.sendSms({ recipient: msg.recipient, body: msg.body });
@@ -155,17 +143,10 @@ export async function executeEngine(ports: EnginePorts, now: Date): Promise<Engi
     }
   });
 
-  // Every run is logged, whatever happened above.
   await ports.writeRunLog(result);
   return result;
 }
 
-/**
- * Resolve a due rule into a persistable reminder, or null when it has no valid
- * recipient (e.g. a CUSTOMER recipient on an internal-notification channel, or an
- * SMS to a customer with no mobile). The Persian text is composed here so the
- * repository only writes rows.
- */
 function buildReminderIntent(
   candidate: ReminderCandidate,
   rule: { id: string; channel: string; recipient: string },
@@ -189,21 +170,20 @@ function buildReminderIntent(
       companyName: candidate.customer.companyName ?? "",
       serviceName: candidate.serviceName,
       expiryDate: candidate.expiryJalali ? toPersianDigits(candidate.expiryJalali) : "",
-      daysRemaining: candidate.daysRemaining === null ? "" : toPersianDigits(String(candidate.daysRemaining)),
+      daysRemaining:
+        candidate.daysRemaining === null ? "" : toPersianDigits(String(candidate.daysRemaining)),
       caseNumber: toPersianDigits(candidate.caseNumber),
       instituteName: config.instituteName,
     });
     return { ...base, userIds: [], smsRecipient: candidate.customer.mobile, smsBody: body };
   }
 
-  // INTERNAL_NOTIFICATION — resolve the recipient to concrete user ids.
   const userIds = resolveNotificationRecipients(rule.recipient, candidate.ownerId, managerIds);
-  if (userIds.length === 0) return null; // e.g. CUSTOMER has no user account
-  void now; // reserved for future time-scoped variants; kept for signature stability
+  if (userIds.length === 0) return null;
+  void now;
   return { ...base, userIds, smsRecipient: null, smsBody: null };
 }
 
-/** Map a rule's recipient code onto the user ids that should be notified. */
 function resolveNotificationRecipients(
   recipient: string,
   ownerId: string,
@@ -215,11 +195,10 @@ function resolveNotificationRecipients(
     case "CASE_OWNER":
       return [ownerId];
     default:
-      return []; // CUSTOMER (or unknown) is not an internal-notification target
+      return [];
   }
 }
 
-/** Resolve a birthday match into a persistable greeting (BirthdayLog + queued SMS). */
 function buildGreetingIntent(
   candidate: { customerId: string; type: string; fullName: string | null; companyName: string | null; mobile: string },
   year: number,

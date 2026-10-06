@@ -56,7 +56,7 @@ model Employee {
   permissionExceptions PermissionException[]
   notifications        Notification[]
   activityHistory      ActivityHistory[]
-
+   createdCampaigns Campaign[] @relation("CampaignCreatedBy")
   @@index([status])
   @@index([departmentId])
 }
@@ -107,6 +107,7 @@ model Customer {
   updatedAt          DateTime @updatedAt
 
   cases        Case[]
+  campaignRecipients CampaignRecipient[]
   birthdayLogs BirthdayLog[]
   tasks        Task[]
 }
@@ -463,4 +464,54 @@ model EngineRunLog {
   smsSent   Int      @default(0)
   errors    Int      @default(0)
   detail    String? // JSON-serialized error specifics
+}
+// ============================================================================
+// Campaigns (CRM-style bulk messaging)
+// ============================================================================
+
+// A one-off or scheduled broadcast to a filtered audience. Channel selects SMS
+// or internal notification. `audienceFilter` is a JSON-serialized AudienceFilter
+// (see campaigns.types.ts) — kept as a String for SQLite/PostgreSQL parity.
+model Campaign {
+  id              String    @id @default(cuid())
+  name            String // 2-100
+  channel         String // CampaignChannel: SMS | INTERNAL_NOTIFICATION
+  templateKey     String // SmsTemplate.eventKey OR "" for internal
+  body            String // rendered template body at send time (kept for audit)
+  audienceFilter  String // JSON-serialized AudienceFilter
+  status          String // CampaignStatus: DRAFT | SCHEDULED | RUNNING | COMPLETED | CANCELLED
+  scheduledAt     DateTime? // null = send as soon as marked RUNNING
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdById     String
+  createdBy       Employee @relation("CampaignCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  recipients CampaignRecipient[]
+
+  @@index([status, scheduledAt])
+  @@index([createdById])
+}
+
+// One row per (campaign, customer). The unique index enforces "each customer
+// receives a campaign at most once" in the database, mirroring SentReminder
+// and BirthdayLog.
+model CampaignRecipient {
+  id            String    @id @default(cuid())
+  campaignId    String
+  campaign      Campaign  @relation(fields: [campaignId], references: [id])
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  mobile        String // snapshot at send time (customer may change later)
+  status        String // RecipientStatus: QUEUED | SENT | FAILED | SKIPPED
+  error         String?
+  smsMessageId  String? // link to the SmsMessage row once queued
+  notificationId String? // link to the Notification row (internal channel)
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([campaignId, customerId])
+  @@index([campaignId, status])
+  @@index([customerId])
 }

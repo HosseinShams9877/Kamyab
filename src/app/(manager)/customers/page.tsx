@@ -141,6 +141,7 @@ export default async function CustomersPage({
         pageCount={result.pageCount}
         total={result.total}
         buildPageHref={pageHref}
+        basePath="/customers"
       />
     </main>
   );

@@ -195,7 +195,7 @@ export function JalaliDatePicker({
         id={id}
         type="text"
         inputMode="numeric"
-        dir="ltr"
+        dir="rtl"
         readOnly
         disabled={disabled}
         value={displayValue}
@@ -204,7 +204,7 @@ export function JalaliDatePicker({
         onFocus={() => !disabled && setOpen(true)}
         className={
           className ??
-          "w-full cursor-pointer rounded-control border border-border bg-card px-3 py-2 text-left text-sm text-text outline-none transition-colors focus:border-primary disabled:opacity-50"
+          "w-full cursor-pointer rounded-control border border-border bg-card px-3 py-2 text-righttext-sm text-text outline-none transition-colors focus:border-primary disabled:opacity-50"
         }
       />
 

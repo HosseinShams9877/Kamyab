@@ -130,6 +130,8 @@ export default async function EmployeeCustomersPage({
         pageCount={result.pageCount}
         total={result.total}
         buildPageHref={pageHref}
+          basePath="/employee/customers"
+
         showOwnerFilter={false}
       />
     </main>

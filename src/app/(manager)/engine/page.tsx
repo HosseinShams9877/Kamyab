@@ -26,6 +26,8 @@ const METRICS: { key: keyof EngineRunView; label: string }[] = [
   { key: "abandoned", label: "دوره رهاشده" },
   { key: "overdueAlerts", label: "هشدار کار عقب‌افتاده" },
   { key: "unfollowedAlerts", label: "هشدار پیگیری‌نشده" },
+  { key: "campaignsProcessed", label: "کمپین پردازش‌شده" },
+  { key: "campaignsSent", label: "پیام کمپین" },
 ];
 
 export default async function EnginePage() {
@@ -86,7 +88,7 @@ export default async function EnginePage() {
                   )}
                 </div>
 
-                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
                   {METRICS.map((m) => (
                     <div
                       key={m.key}

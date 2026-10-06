@@ -15,6 +15,7 @@ import {
   Cpu,
   BarChart3,
   Bell,
+  Megaphone,
   Circle,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const ICON_BY_SEGMENT: Record<string, LucideIcon> = {
   cases: Briefcase,
   tasks: CheckSquare,
   renewals: RefreshCw,
+  campaigns: Megaphone,
   services: Package,
   employees: UserCog,
   settings: Settings,
@@ -65,9 +67,6 @@ export function AppShell({
     setOpen(false);
   }, [pathname]);
 
-  // The item that "owns" the current URL: the LONGEST href that matches the
-  // path exactly or as a prefix. Prevents both /dashboard and /cases from being
-  // active at once when the current path matches more than one prefix.
   const activeHref = navItems
     .map((i) => i.href)
     .filter((href) => pathname === href || pathname.startsWith(href + "/"))

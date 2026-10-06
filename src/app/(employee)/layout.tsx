@@ -33,6 +33,10 @@ export default async function EmployeeLayout({
     can(user, "renewals.view") && { href: "/employee/renewals", label: "تمدیدها" },
     can(user, "services.view") && { href: "/employee/services", label: "خدمات" },
     can(user, "employees.view") && { href: "/employee/employees", label: "کارمندان" },
+    can(user, "campaigns.view") && {
+      href: "/employee/campaigns",
+      label: "کمپین‌ها",
+    },
     can(user, "reports.view") && { href: "/employee/reports", label: "گزارش‌ها" },
   ].filter(Boolean) as NavItem[];
 

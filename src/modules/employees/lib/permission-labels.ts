@@ -79,6 +79,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    title: "کمپین‌ها",
+    items: [
+      { key: "campaigns.view", label: "مشاهدهٔ کمپین‌ها" },
+      { key: "campaigns.create", label: "ایجاد کمپین" },
+      { key: "campaigns.edit", label: "ویرایش کمپین" },
+      { key: "campaigns.send", label: "ارسال کمپین" },
+      { key: "campaigns.cancel", label: "لغو کمپین" },
+    ],
+  },
+  {
     title: "خدمات",
     items: [
       { key: "services.view", label: "مشاهده" },

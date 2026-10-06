@@ -9,31 +9,14 @@ import type {
   SmsLogRow,
 } from "./engine.types";
 
-// ALL engine-OWNED Prisma access lives here: the tables the engine writes to
-// (SentReminder, BirthdayLog, SmsMessage, EngineRunLog) plus the cross-cutting
-// Notification inbox. Cross-MODULE reads (candidates, overdue owners, greeting
-// customers, archiving, abandonment) do NOT live here — they go through the
-// periods/tasks/customers/employees service seams and are wired in engine.service
-// (rule 9). This file is called only by engine.service's buildRealPorts. Persian
-// text never appears here: every message is composed upstream (engine.guards /
-// the orchestrator) and handed in ready to store.
+// ALL engine-OWNED Prisma access lives here.
 
-/** The 24-hour anti-repeat window for managerial/owner alerts, in milliseconds. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** A unique-constraint violation (P2002) — the "already recorded" signal. */
 function isUniqueError(e: unknown): e is Prisma.PrismaClientKnownRequestError {
   return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 }
 
-/**
- * Persist one due reminder. The SentReminder unique index (periodId, ruleId,
- * channel) IS the "once per period" guarantee — a duplicate raises P2002, caught
- * here to return false so the orchestrator never counts a re-run or a made-up run
- * as a fresh send. The reminder row and its effect (internal notifications OR a
- * queued SMS) commit together (rule 4); the SentReminder row is created first so
- * a duplicate aborts before any notification/SMS is written.
- */
 export async function dispatchReminder(intent: ReminderIntent): Promise<boolean> {
   try {
     await prisma.$transaction(async (tx) => {
@@ -62,17 +45,11 @@ export async function dispatchReminder(intent: ReminderIntent): Promise<boolean>
     });
     return true;
   } catch (e) {
-    if (isUniqueError(e)) return false; // already recorded — a re-run or made-up run
+    if (isUniqueError(e)) return false;
     throw e;
   }
 }
 
-/**
- * Persist one birthday/founding-day greeting. The BirthdayLog unique index
- * (customerId, year) IS the "once per year" guarantee — a duplicate raises P2002,
- * caught here to return false. The log row and the queued SMS commit together
- * (rule 4); the log row is created first so a duplicate aborts before the SMS.
- */
 export async function dispatchGreeting(intent: GreetingIntent): Promise<boolean> {
   try {
     await prisma.$transaction(async (tx) => {
@@ -90,19 +67,11 @@ export async function dispatchGreeting(intent: GreetingIntent): Promise<boolean>
     });
     return true;
   } catch (e) {
-    if (isUniqueError(e)) return false; // already greeted this year
+    if (isUniqueError(e)) return false;
     throw e;
   }
 }
 
-/**
- * Create an alert for each recipient that has no identical-subject alert within
- * the last 24 hours (`now` bound by buildRealPorts). The dedupe keys on the stable
- * `dedupePrefix` — text that never varies with the count — so today's alert is
- * suppressed even though the count in the full message changed. This is the 24h
- * anti-repeat WITHOUT a dedicated table (tasks 2 & 3). Returns how many were
- * actually created, so the orchestrator counts an alert only when one landed.
- */
 export async function createAlertIfAbsent(intent: AlertIntent, now: Date): Promise<number> {
   const since = new Date(now.getTime() - DAY_MS);
   let created = 0;
@@ -122,7 +91,6 @@ export async function createAlertIfAbsent(intent: AlertIntent, now: Date): Promi
   return created;
 }
 
-/** QUEUED messages awaiting a provider send, oldest first (task 7). */
 export async function listQueuedSms(): Promise<QueuedSms[]> {
   return prisma.smsMessage.findMany({
     where: { status: "QUEUED" },
@@ -131,7 +99,6 @@ export async function listQueuedSms(): Promise<QueuedSms[]> {
   });
 }
 
-/** Mark a queued message SENT (clears any stale error from a prior attempt). */
 export async function markSmsSent(id: string): Promise<void> {
   await prisma.smsMessage.update({
     where: { id },
@@ -139,7 +106,6 @@ export async function markSmsSent(id: string): Promise<void> {
   });
 }
 
-/** Mark a queued message FAILED, keeping the provider's error for the SMS log. */
 export async function markSmsFailed(id: string, error: string): Promise<void> {
   await prisma.smsMessage.update({
     where: { id },
@@ -147,17 +113,13 @@ export async function markSmsFailed(id: string, error: string): Promise<void> {
   });
 }
 
-/**
- * Record the run's tallies. EngineRunLog has no columns for the two alert counts
- * or the per-task error details, so they are serialized into `detail` (JSON) — the
- * /engine page reads them back from there. `now` is bound by buildRealPorts so the
- * logged time matches the run's reference instant. Every run is logged, always.
- */
 export async function writeRunLog(result: EngineRunResult, now: Date): Promise<void> {
   const detail = JSON.stringify({
     overdueAlerts: result.overdueAlerts,
     unfollowedAlerts: result.unfollowedAlerts,
     errorDetails: result.errorDetails,
+    campaignsProcessed: result.campaignsProcessed,
+    campaignsSent: result.campaignsSent,
   });
   await prisma.engineRunLog.create({
     data: {
@@ -173,7 +135,6 @@ export async function writeRunLog(result: EngineRunResult, now: Date): Promise<v
   });
 }
 
-/** One EngineRunLog row as stored (the /engine page reduces `detail` to counts). */
 export type RunLogRow = {
   id: string;
   runAt: Date;
@@ -186,7 +147,6 @@ export type RunLogRow = {
   detail: string | null;
 };
 
-/** The most recent runs, newest first, for the /engine run-log view. */
 export function listRecentRuns(limit: number): Promise<RunLogRow[]> {
   return prisma.engineRunLog.findMany({
     orderBy: { runAt: "desc" },
@@ -206,10 +166,9 @@ export function listRecentRuns(limit: number): Promise<RunLogRow[]> {
 }
 
 // ---------------------------------------------------------------------------
-// SMS log (C-14) — direct reads of the SmsMessage queue for the engine page.
+// SMS log (C-14)
 // ---------------------------------------------------------------------------
 
-/** Counts grouped by SMS status (QUEUED / SENT / FAILED). */
 export async function countSmsByStatus(): Promise<Record<string, number>> {
   const groups = await prisma.smsMessage.groupBy({
     by: ["status"],
@@ -220,7 +179,6 @@ export async function countSmsByStatus(): Promise<Record<string, number>> {
   return out;
 }
 
-/** Most recent SMS messages of any status, newest first. */
 export async function listRecentSmsMessages(limit = 30): Promise<SmsLogRow[]> {
   const rows = await prisma.smsMessage.findMany({
     orderBy: { createdAt: "desc" },
@@ -246,4 +204,52 @@ export async function listRecentSmsMessages(limit = 30): Promise<SmsLogRow[]> {
     createdAt: r.createdAt,
     sentAt: r.sentAt,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Campaign ports (used by the campaign orchestrator)
+// ---------------------------------------------------------------------------
+
+/** Queue an SMS for the campaign dispatcher. Returns the new row's id. */
+export async function queueSms(args: {
+  recipient: string;
+  body: string;
+  templateKey: string;
+}): Promise<{ id: string }> {
+  const r = await prisma.smsMessage.create({
+    data: {
+      recipient: args.recipient,
+      body: args.body,
+      templateKey: args.templateKey,
+      status: "QUEUED",
+    },
+    select: { id: true },
+  });
+  return r;
+}
+
+/** Create a notification for a customer's most recent case owner (or the first
+ *  active manager if the customer has no case). */
+export async function createCampaignNotification(args: {
+  customerId: string;
+  message: string;
+}): Promise<{ id: string } | null> {
+  const latestCase = await prisma.case.findFirst({
+    where: { customerId: args.customerId },
+    orderBy: { createdAt: "desc" },
+    select: { ownerId: true },
+  });
+  let userId = latestCase?.ownerId;
+  if (!userId) {
+    const mgr = await prisma.employee.findFirst({
+      where: { role: "MANAGER", status: true },
+      select: { id: true },
+    });
+    userId = mgr?.id;
+  }
+  if (!userId) return null;
+  return prisma.notification.create({
+    data: { userId, message: args.message },
+    select: { id: true },
+  });
 }

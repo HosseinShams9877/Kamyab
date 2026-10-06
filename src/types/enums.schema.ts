@@ -55,3 +55,12 @@ export const RenewalEffect = z.enum([
 // SMS message lifecycle (SmsMessage.status). Not in the schema-doc enum table
 // but a fixed set the engine relies on.
 export const SmsStatus = z.enum(["QUEUED", "SENT", "FAILED"]);
+export const CampaignChannel = z.enum(["SMS", "INTERNAL_NOTIFICATION"]);
+export const CampaignStatus = z.enum([
+  "DRAFT",
+  "SCHEDULED",
+  "RUNNING",
+  "COMPLETED",
+  "CANCELLED",
+]);
+export const RecipientStatus = z.enum(["QUEUED", "SENT", "FAILED", "SKIPPED"]);

@@ -49,6 +49,7 @@ export const SMS_EVENT_LABELS: Record<string, string> = {
   renewal_reminder: "یادآوری تمدید",
   birthday_natural: "تبریک تولد (شخص حقیقی)",
   birthday_legal: "تبریک سالروز تأسیس (شخص حقوقی)",
+  campaign_general: "کمپین پیامکی",
 };
 
 export function smsEventLabel(eventKey: string): string {

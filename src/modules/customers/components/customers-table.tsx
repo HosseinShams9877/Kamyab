@@ -22,6 +22,10 @@ type Props = {
   total: number;
   buildPageHref: (page: number) => string;
   showOwnerFilter?: boolean;
+  /** Base path for the filter form action (no trailing slash). */
+  basePath?: string;
+  /** Detail-route prefix for the "پرونده مشتری" link (no trailing slash). */
+  detailBasePath?: string;
 };
 
 const inputClass =
@@ -38,14 +42,17 @@ export function CustomersTable({
   total,
   buildPageHref,
   showOwnerFilter = true,
+  basePath = "/customers",
+  detailBasePath = "/customers",
 }: Props) {
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
       <form
         method="get"
-        action="."
+        action={basePath}
         className="grid grid-cols-1 gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-6"
       >
+        <input type="hidden" name="page" value="1" />
         <div className="sm:col-span-2 lg:col-span-2">
           <input
             name="q"
@@ -171,7 +178,7 @@ export function CustomersTable({
                 </td>
                 <td className="px-4 py-3">
                   <Link
-                    href={`/customers/${c.id}`}
+                    href={`${detailBasePath}/${c.id}`}
                     className="inline-flex min-h-[36px] items-center rounded-control border border-border px-3 py-1.5 text-sm text-primary transition-colors hover:bg-page"
                   >
                     پرونده مشتری

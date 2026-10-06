@@ -13,6 +13,9 @@ import type {
   ReminderRecipient,
   RenewalEffect,
   SmsStatus,
+  CampaignChannel,
+  CampaignStatus,
+  RecipientStatus,
 } from "./enums.schema";
 
 // Single source for the fixed-enum union types, inferred from the Zod schemas
@@ -31,3 +34,6 @@ export type ReminderChannel = z.infer<typeof ReminderChannel>;
 export type ReminderRecipient = z.infer<typeof ReminderRecipient>;
 export type RenewalEffect = z.infer<typeof RenewalEffect>;
 export type SmsStatus = z.infer<typeof SmsStatus>;
+export type CampaignChannel = z.infer<typeof CampaignChannel>;
+export type CampaignStatus = z.infer<typeof CampaignStatus>;
+export type RecipientStatus = z.infer<typeof RecipientStatus>;
