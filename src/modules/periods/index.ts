@@ -3,11 +3,6 @@
 // "@/modules/periods" only (rule 8). Client components import the isomorphic
 // leaves (./periods.types, ./periods.schema, ./periods.guards, ./lib/labels)
 // directly, never this barrel (it pulls in server-only Prisma code).
-//
-// Scope: create/renew a case's periods (the seams the cases module calls in its
-// save transaction), read periods for the case page, and the renewals work-queue
-// (C-9 renewal + follow-up, C-10 renewals page + manual abandon/restore). The
-// renewal rules + tab classification live in periods.guards (one place, rule 2).
 
 // --- Service (server-only: Prisma, Jalali conversion, read-time computation) -
 export {
@@ -37,6 +32,10 @@ export {
   listUnfollowedRenewals,
   abandonExpiredPeriods,
   periodHasOpenStages,
+  getStageForDueDate,
+  setStageDueDateTx,
+  listStageDueCandidates,
+  createStageReminderLog,
 } from "./periods.service";
 
 // --- Types (isomorphic) -----------------------------------------------------
@@ -61,6 +60,7 @@ export type {
   EngineReminderRule,
   EngineReminderCandidate,
   EngineUnfollowedRenewal,
+  StageDueCandidate,
 } from "./periods.types";
 
 // --- Schema (isomorphic) ----------------------------------------------------

@@ -11,7 +11,12 @@ import { getService, listActiveServiceOptions } from "@/modules/services";
 import { getServicePaths, listDurations } from "@/modules/paths";
 import { listActiveCustomerOptions, saveCaseBirthInfoTx } from "@/modules/customers";
 import { listCaseOwnerOptions } from "@/modules/employees";
-import { getThresholds, listActiveCancellationReasons } from "@/modules/settings";
+import {
+  getThresholds,
+  listActiveCancellationReasons,
+  getSetting,
+  saveSettings as saveSettingsBatch,
+} from "@/modules/settings";
 import { can, scopeByOwnership, type Authorizable } from "@/modules/permissions";
 import {
   createRegistrationPeriodTx,
@@ -33,6 +38,8 @@ import {
   setPeriodFollowUpTx,
   isAbandonable,
   periodHasOpenStages,
+  getStageForDueDate,
+  setStageDueDateTx,
   RENEWAL_FORBIDDEN,
   SERVICE_NOT_RENEWABLE,
   NO_ACTIVE_PERIOD,
@@ -103,6 +110,7 @@ import type {
   OwnerFilterOption,
   OwnerChangeMeta,
   ChangeOwnerResult,
+  StageSettings,
 } from "./cases.types";
 import { toEnglishDigits } from "@/lib/digits";
 
@@ -368,8 +376,6 @@ export async function runStageAction(
         note,
         actorId: user.id,
       });
-      // After a completing op, if the period has no open stage left, flip the
-      // case to COMPLETED in the same transaction (C-6 side effect #4).
       if (COMPLETING_OPS.has(input.op)) {
         const hasOpen = await periodHasOpenStages(tx, ctx.periodId);
         if (!hasOpen) {
@@ -379,7 +385,6 @@ export async function runStageAction(
           });
         }
       }
-      // On Reopen of a previously-completed case, flip it back to IN_PROGRESS.
       if (input.op === "reopen" && kase.status === "COMPLETED") {
         await tx.case.update({
           where: { id: ctx.caseId },
@@ -419,14 +424,18 @@ export async function addExceptionalStage(
     caseId: period.caseId,
     actorId: user.id,
     promoteFromNew: false,
-    apply: (tx) => addExceptionalStageTx(tx, { periodId: input.periodId, title, actorId: user.id }),
+    apply: (tx) =>
+      addExceptionalStageTx(tx, { periodId: input.periodId, title, actorId: user.id }),
     historyAction: "stage.added",
     historyDetail: JSON.stringify({ title, periodId: input.periodId }),
   });
   return { ok: true };
 }
 
-export async function deleteStage(user: Authorizable, stageId: string): Promise<StageResult> {
+export async function deleteStage(
+  user: Authorizable,
+  stageId: string,
+): Promise<StageResult> {
   const ctx = await getStageForAction(stageId);
   if (!ctx) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
   const kase = await repo.findCaseForStage(ctx.caseId);
@@ -860,7 +869,8 @@ export async function recordRenewalFollowUp(
     caseId: input.caseId,
     actorId: user.id,
     promoteFromNew: false,
-    apply: (tx) => setPeriodFollowUpTx(tx, active.id, { followUpStatus: input.followUpStatus }),
+    apply: (tx) =>
+      setPeriodFollowUpTx(tx, active.id, { followUpStatus: input.followUpStatus }),
     historyAction: "period.followup",
     historyDetail: JSON.stringify({
       periodId: active.id,
@@ -905,7 +915,10 @@ export async function abandonPeriod(
     promoteFromNew: false,
     apply: (tx) => setPeriodStatusTx(tx, input.periodId, "ABANDONED"),
     historyAction: "period.abandoned",
-    historyDetail: JSON.stringify({ periodId: input.periodId, indexNumber: lifecycle.indexNumber }),
+    historyDetail: JSON.stringify({
+      periodId: input.periodId,
+      indexNumber: lifecycle.indexNumber,
+    }),
   });
   return { ok: true };
 }
@@ -931,7 +944,10 @@ export async function restorePeriod(
     promoteFromNew: false,
     apply: (tx) => setPeriodStatusTx(tx, input.periodId, "ACTIVE"),
     historyAction: "period.restored",
-    historyDetail: JSON.stringify({ periodId: input.periodId, indexNumber: lifecycle.indexNumber }),
+    historyDetail: JSON.stringify({
+      periodId: input.periodId,
+      indexNumber: lifecycle.indexNumber,
+    }),
   });
   return { ok: true };
 }
@@ -964,7 +980,9 @@ export async function getCancellationDetail(caseId: string): Promise<{
   const d = await repo.findCancellationDetail(caseId);
   if (!d) return null;
   return {
-    date: d.cancelledAt ? formatJalali(toJalali(d.cancelledAt), { persianDigits: false }) : null,
+    date: d.cancelledAt
+      ? formatJalali(toJalali(d.cancelledAt), { persianDigits: false })
+      : null,
     reasonTitle: d.reasonTitle,
     note: d.note,
     cancelledByName: d.cancelledByName,
@@ -1010,8 +1028,6 @@ export async function cancelCase(
       });
       if (active) await setPeriodStatusTx(tx, active.id, "CANCELLED");
       await cancelOpenTasksTx(tx, { caseId: input.caseId, message: taskMessage });
-      // Always notify the case's owner (C-8), regardless of whether the case
-      // had any open task to close.
       await repo.notifyUserTx(tx, {
         userId: kase.ownerId,
         message: ownerMessage,
@@ -1074,10 +1090,7 @@ export async function getCancellationReport(
 // --- Change owner (C-5 header action) ---------------------------------------
 
 export function canChangeOwner(user: Authorizable, ownerId: string): boolean {
-  return (
-    can(user, "cases.assign_owner") &&
-    can(user, "cases.edit", { ownerId })
-  );
+  return can(user, "cases.assign_owner") && can(user, "cases.edit", { ownerId });
 }
 
 export async function getOwnerChangeMeta(
@@ -1152,4 +1165,101 @@ export async function changeCaseOwner(
   });
 
   return { ok: true, movedTasks };
+}
+
+// --- Stage due date & settings (تب تنظیمات مراحل) --------------------------
+
+const STAGE_SETTINGS_DEFAULTS: StageSettings = {
+  enabled: false,
+  daysBefore: 3,
+  channels: ["INTERNAL_NOTIFICATION"],
+  recipients: ["CASE_OWNER"],
+  autoPrompt: false,
+  notificationTemplate:
+    "یادآوری سررسید مرحله: «{stageTitle}» پروندهٔ {caseNumber} — {daysRemaining} روز مانده. {instituteName}",
+  smsTemplate:
+    "{customerName} عزیز، سررسید مرحلهٔ «{stageTitle}» پروندهٔ {caseNumber} تا {daysRemaining} روز دیگر است. {instituteName}",
+};
+
+export async function getStageSettings(): Promise<StageSettings> {
+  const [
+    enabled,
+    daysBefore,
+    channels,
+    recipients,
+    autoPrompt,
+    notificationTemplate,
+    smsTemplate,
+  ] = await Promise.all([
+    getSetting<boolean>("stage_reminder_enabled"),
+    getSetting<number>("stage_reminder_days"),
+    getSetting<string[]>("stage_reminder_channels"),
+    getSetting<string[]>("stage_reminder_recipients"),
+    getSetting<boolean>("stage_auto_prompt"),
+    getSetting<string>("stage_notification_template"),
+    getSetting<string>("stage_sms_template"),
+  ]);
+  return {
+    enabled: enabled ?? STAGE_SETTINGS_DEFAULTS.enabled,
+    daysBefore: daysBefore ?? STAGE_SETTINGS_DEFAULTS.daysBefore,
+    channels:
+      (channels as StageSettings["channels"]) ?? STAGE_SETTINGS_DEFAULTS.channels,
+    recipients:
+      (recipients as StageSettings["recipients"]) ??
+      STAGE_SETTINGS_DEFAULTS.recipients,
+    autoPrompt: autoPrompt ?? STAGE_SETTINGS_DEFAULTS.autoPrompt,
+    notificationTemplate:
+      notificationTemplate ?? STAGE_SETTINGS_DEFAULTS.notificationTemplate,
+    smsTemplate: smsTemplate ?? STAGE_SETTINGS_DEFAULTS.smsTemplate,
+  };
+}
+
+export async function saveStageSettings(input: StageSettings): Promise<void> {
+  await saveSettingsBatch({
+    stage_reminder_enabled: JSON.stringify(input.enabled),
+    stage_reminder_days: JSON.stringify(input.daysBefore),
+    stage_reminder_channels: JSON.stringify(input.channels),
+    stage_reminder_recipients: JSON.stringify(input.recipients),
+    stage_auto_prompt: JSON.stringify(input.autoPrompt),
+    stage_notification_template: JSON.stringify(input.notificationTemplate),
+    stage_sms_template: JSON.stringify(input.smsTemplate),
+  });
+}
+
+export async function setStageDueDate(
+  user: Authorizable,
+  stageId: string,
+  dueDateInput: string,
+): Promise<StageResult> {
+  const ctx = await getStageForDueDate(stageId);
+  if (!ctx) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+
+  const kase = await repo.findCaseForStage(ctx.caseId);
+  if (!kase) return { ok: false, code: 404, message: STAGE_NOT_FOUND };
+
+  if (!canEditStages(user, kase.ownerId)) {
+    return { ok: false, code: 403, message: STAGE_FORBIDDEN };
+  }
+  if (kase.status === "CANCELLED") {
+    return { ok: false, code: 409, message: CASE_CANCELLED };
+  }
+
+  let dueDate: Date | null = null;
+  if (dueDateInput && dueDateInput.trim()) {
+    const j = parseJalali(dueDateInput.trim());
+    if (!j) {
+      return { ok: false, code: 409, message: "تاریخ سررسید معتبر نیست." };
+    }
+    dueDate = toGregorianDate(j);
+  }
+
+  await repo.caseMutationTx({
+    caseId: ctx.caseId,
+    actorId: user.id,
+    promoteFromNew: false,
+    apply: (tx) => setStageDueDateTx(tx, stageId, dueDate),
+    historyAction: "stage.due_date_set",
+    historyDetail: JSON.stringify({ stageId, dueDate: dueDateInput || null }),
+  });
+  return { ok: true };
 }

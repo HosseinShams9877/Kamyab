@@ -7,6 +7,7 @@ import type {
   QueuedSms,
   ReminderIntent,
   SmsLogRow,
+  StageReminderIntent,
 } from "./engine.types";
 
 // ALL engine-OWNED Prisma access lives here.
@@ -48,6 +49,65 @@ export async function dispatchReminder(intent: ReminderIntent): Promise<boolean>
     if (isUniqueError(e)) return false;
     throw e;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Stage-due reminders (تب تنظیمات مراحل)
+// ---------------------------------------------------------------------------
+
+/**
+ * Persist a stage-due reminder. For each requested channel we insert one
+ * StageReminderLog row (the (stageId, daysBefore, channel) unique index makes
+ * a repeated run idempotent) and then queue the SMS / create the notifications.
+ *
+ * Returns true when at least one channel row was newly created; false when every
+ * requested channel had already fired (P2002 on all of them).
+ */
+export async function dispatchStageReminder(
+  intent: StageReminderIntent,
+): Promise<boolean> {
+  let createdAny = false;
+  for (const channel of intent.channels) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.stageReminderLog.create({
+          data: {
+            stageId: intent.stageId,
+            daysBefore: intent.daysBefore,
+            channel,
+          },
+        });
+
+        if (channel === "SMS_TO_CUSTOMER") {
+          if (intent.smsRecipient && intent.smsBody) {
+            await tx.smsMessage.create({
+              data: {
+                recipient: intent.smsRecipient,
+                body: intent.smsBody,
+                templateKey: "stage_due_reminder",
+                status: "QUEUED",
+              },
+            });
+          }
+        } else if (
+          channel === "INTERNAL_NOTIFICATION" &&
+          intent.recipientUserIds.length > 0
+        ) {
+          await tx.notification.createMany({
+            data: intent.recipientUserIds.map((userId) => ({
+              userId,
+              message: intent.notificationMessage,
+            })),
+          });
+        }
+      });
+      createdAny = true;
+    } catch (e) {
+      if (isUniqueError(e)) continue;
+      throw e;
+    }
+  }
+  return createdAny;
 }
 
 export async function dispatchGreeting(intent: GreetingIntent): Promise<boolean> {
@@ -120,6 +180,7 @@ export async function writeRunLog(result: EngineRunResult, now: Date): Promise<v
     errorDetails: result.errorDetails,
     campaignsProcessed: result.campaignsProcessed,
     campaignsSent: result.campaignsSent,
+    stageReminders: result.stageReminders,
   });
   await prisma.engineRunLog.create({
     data: {

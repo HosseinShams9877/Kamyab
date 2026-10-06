@@ -34,7 +34,15 @@ export type SettingKey =
   | "sms_provider"
   | "sms_api_key"
   | "sms_sender_number"
-  | "sms_real_send";
+  | "sms_real_send"
+  // Stage-due reminders (تب تنظیمات مراحل)
+  | "stage_reminder_enabled"
+  | "stage_reminder_days"
+  | "stage_reminder_channels"
+  | "stage_reminder_recipients"
+  | "stage_auto_prompt"
+  | "stage_notification_template"
+  | "stage_sms_template";
 
 // ---------------------------------------------------------------------------
 // Editable manager-defined lists (B-5, B-6, B-7)

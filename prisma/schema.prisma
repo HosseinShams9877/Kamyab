@@ -26,7 +26,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+ 
 }
 
 // ============================================================================
@@ -250,19 +250,23 @@ model CaseStage {
   id              String    @id @default(cuid())
   periodId        String
   period          Period    @relation(fields: [periodId], references: [id])
-  title           String // copied from template, or typed for an exceptional stage
-  order           Int // reorderable position
-  status          String // StageStatus: PENDING | IN_PROGRESS | DONE | REJECTED | NOT_NEEDED
-  startedAt       DateTime? // set on Start
-  endedAt         DateTime? // set on Done/Not-Needed; cleared on Reopen
-  attemptCount    Int       @default(0) // +1 on each Reject
-  note            String? // mandatory when Rejected
-  isExceptional   Boolean   @default(false) // per-case added stage (bound to current period only)
+  title           String
+  order           Int
+  status          String
+  startedAt       DateTime?
+  endedAt         DateTime?
+  dueDate         DateTime?
+  attemptCount    Int       @default(0)
+  note            String?
+  isExceptional   Boolean   @default(false)
   lastChangedById String?
   lastChangedBy   Employee? @relation("StageLastChangedBy", fields: [lastChangedById], references: [id])
 
+  stageReminders StageReminderLog[]
+
   @@index([periodId, order])
   @@index([periodId, status])
+  @@index([dueDate, status])
 }
 
 // ============================================================================
@@ -514,4 +518,15 @@ model CampaignRecipient {
   @@unique([campaignId, customerId])
   @@index([campaignId, status])
   @@index([customerId])
+}
+model StageReminderLog {
+  id         String    @id @default(cuid())
+  stageId    String
+  stage      CaseStage @relation(fields: [stageId], references: [id])
+  daysBefore Int
+  channel    String
+  sentAt     DateTime  @default(now())
+
+  @@unique([stageId, daysBefore, channel])
+  @@index([stageId])
 }

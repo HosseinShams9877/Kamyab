@@ -86,6 +86,51 @@ export type AlertIntent = {
   dedupePrefix: string;
 };
 
+// ---------------------------------------------------------------------------
+// Stage-due reminders (تب تنظیمات مراحل)
+// ---------------------------------------------------------------------------
+
+/** A candidate open stage with a due date and a computed days-remaining. */
+export type StageDueCandidate = {
+  stageId: string;
+  stageTitle: string;
+  order: number;
+  caseId: string;
+  caseNumber: string;
+  periodId: string;
+  ownerId: string;
+  daysRemaining: number;
+  dueJalali: string | null;
+  customer: {
+    type: string;
+    fullName: string | null;
+    companyName: string | null;
+    mobile: string;
+  };
+};
+
+/** A fully-resolved stage-due reminder ready to persist. */
+export type StageReminderIntent = {
+  stageId: string;
+  daysBefore: number;
+  channels: string[]; // one or both of INTERNAL_NOTIFICATION / SMS_TO_CUSTOMER
+  recipientUserIds: string[];
+  notificationMessage: string;
+  smsRecipient: string | null;
+  smsBody: string | null;
+};
+
+/** The stage-due reminder settings the engine reads once per run. */
+export type StageSettings = {
+  enabled: boolean;
+  daysBefore: number;
+  channels: string[];
+  recipients: string[];
+  autoPrompt: boolean;
+  notificationTemplate: string;
+  smsTemplate: string;
+};
+
 /** Settings + rendered-template inputs the orchestrator needs, read once per run. */
 export type EngineConfig = {
   instituteName: string;
@@ -93,6 +138,7 @@ export type EngineConfig = {
   birthday: { enabled: boolean; sendHour: number };
   realSend: boolean;
   templates: Record<string, string>;
+  stage: StageSettings;
 };
 
 /** The tallies of one run, written to EngineRunLog. */
@@ -108,6 +154,7 @@ export type EngineRunResult = {
   errorDetails: string[];
   campaignsProcessed: number;
   campaignsSent: number;
+  stageReminders: number;
 };
 
 /**
@@ -120,6 +167,10 @@ export interface EnginePorts {
   // Task 1 — renewal reminders.
   listReminderCandidates(): Promise<ReminderCandidate[]>;
   dispatchReminder(intent: ReminderIntent): Promise<boolean>;
+
+  // Task 1b — stage-due reminders.
+  listStageDueCandidates(): Promise<StageDueCandidate[]>;
+  dispatchStageReminder(intent: StageReminderIntent): Promise<boolean>;
 
   // Task 2 — overdue-task alerts to managers.
   listOverdueOwners(): Promise<OverdueOwner[]>;

@@ -52,6 +52,11 @@ const followUpResults: { title: string; effectOnRenewal: string }[] = [
 // Baseline settings. Values are JSON-serialized so numbers/booleans round-trip
 // through the String `value` column. Thresholds follow B-8; timezone follows the
 // owner's ruling (Asia/Tehran). The SMS real-send switch defaults OFF for safety.
+//
+// Stage-due reminders (تب تنظیمات مراحل): the whole feature is OFF by default,
+// the notification-only channel is the default, and the case-owner is the default
+// recipient. Managers turn it on and customise channels / recipients / templates
+// from the case page's settings tab.
 const settings: Record<string, unknown> = {
   institute_name: "موسسه حقوقی ثبت کامیاب",
   institute_phone: "",
@@ -67,6 +72,16 @@ const settings: Record<string, unknown> = {
   sms_api_key: "", // secret; never echoed back to the client after saving (B-10)
   sms_sender_number: "",
   sms_real_send: false, // real sending stays off until the manager enables it
+  // Stage-due reminders (تب تنظیمات مراحل)
+  stage_reminder_enabled: false,
+  stage_reminder_days: 3,
+  stage_reminder_channels: ["INTERNAL_NOTIFICATION"],
+  stage_reminder_recipients: ["CASE_OWNER"],
+  stage_auto_prompt: false,
+  stage_notification_template:
+    "یادآوری سررسید مرحله: «{stageTitle}» پروندهٔ {caseNumber} — {daysRemaining} روز مانده. {instituteName}",
+  stage_sms_template:
+    "{customerName} عزیز، سررسید مرحلهٔ «{stageTitle}» پروندهٔ {caseNumber} تا {daysRemaining} روز دیگر است. {instituteName}",
 };
 
 // Default SMS templates ({placeholders} are filled by the engine).
@@ -83,7 +98,14 @@ const smsTemplates: { eventKey: string; body: string }[] = [
     eventKey: "birthday_legal",
     body: "{companyName} گرامی، سالروز تأسیس مجموعه‌تان را تبریک می‌گوییم. {instituteName}",
   },
-  { eventKey: "campaign_general", body: "سلام {customerName}، {instituteName} در خدمت شماست." },
+  {
+    eventKey: "campaign_general",
+    body: "سلام {customerName}، {instituteName} در خدمت شماست.",
+  },
+  {
+    eventKey: "stage_due_reminder",
+    body: "{customerName} عزیز، سررسید مرحلهٔ «{stageTitle}» پروندهٔ {caseNumber} تا {daysRemaining} روز دیگر است. {instituteName}",
+  },
 ];
 
 async function seedLookup(
@@ -194,4 +216,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

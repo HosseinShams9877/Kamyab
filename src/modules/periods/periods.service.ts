@@ -20,6 +20,7 @@ import type {
   MoveStageArgs,
   EngineReminderCandidate,
   EngineUnfollowedRenewal,
+  StageDueCandidate,
 } from "./periods.types";
 
 // Business logic for the periods domain. Jalali<->Date conversion and the
@@ -59,6 +60,7 @@ function mapStage(s: repo.PeriodWithDetail["stages"][number]): StageRow {
     isExceptional: s.isExceptional,
     startDate: dateToJalali(s.startedAt),
     endDate: dateToJalali(s.endedAt),
+    dueDate: dateToJalali(s.dueDate),
     attemptCount: s.attemptCount,
     note: s.note,
     lastChangedByName: s.lastChangedBy?.fullName ?? null,
@@ -162,8 +164,6 @@ export function moveStageTx(
   return repo.moveStageTx(tx, args);
 }
 
-/** Whether a period still has any open (non-closed) stage. Used by the cases
- *  service to decide whether to flip Case.status to COMPLETED after a Done. */
 export function periodHasOpenStages(
   tx: Prisma.TransactionClient,
   periodId: string,
@@ -247,9 +247,6 @@ export function setPeriodStatusTx(
   return repo.setPeriodStatusTx(tx, periodId, status);
 }
 
-/**
- * The renewals work-queue for one tab (C-10), with optional filters.
- */
 export async function getRenewalsView(
   tab: RenewalTab,
   params: RenewalListParams = {},
@@ -417,4 +414,56 @@ export async function abandonExpiredPeriods(now: Date = new Date()): Promise<num
     )
     .map((r) => r.id);
   return repo.abandonPeriods(ids);
+}
+
+// --- Stage due dates (تب تنظیمات مراحل) ------------------------------------
+
+export async function getStageForDueDate(stageId: string) {
+  return repo.findStageForDueDate(stageId);
+}
+
+export function setStageDueDateTx(
+  tx: Prisma.TransactionClient,
+  stageId: string,
+  dueDate: Date | null,
+): Promise<void> {
+  return repo.setStageDueDateTx(tx, stageId, dueDate);
+}
+
+export async function listStageDueCandidates(
+  now: Date = new Date(),
+): Promise<StageDueCandidate[]> {
+  const rows = await repo.findStageDueCandidates();
+  const out: StageDueCandidate[] = [];
+  for (const r of rows) {
+    if (!r.dueDate) continue;
+    const daysRemaining = daysRemainingFromDate(r.dueDate, now);
+    if (daysRemaining === null) continue;
+    out.push({
+      stageId: r.id,
+      stageTitle: r.title,
+      order: r.order,
+      caseId: r.period.case.id,
+      caseNumber: r.period.case.number,
+      periodId: r.periodId,
+      ownerId: r.period.case.ownerId,
+      daysRemaining,
+      dueJalali: dateToJalali(r.dueDate),
+      customer: {
+        type: r.period.case.customer.type,
+        fullName: r.period.case.customer.fullName,
+        companyName: r.period.case.customer.companyName,
+        mobile: r.period.case.customer.mobile,
+      },
+    });
+  }
+  return out;
+}
+
+export async function createStageReminderLog(args: {
+  stageId: string;
+  daysBefore: number;
+  channel: string;
+}): Promise<void> {
+  return repo.createStageReminderLog(args);
 }

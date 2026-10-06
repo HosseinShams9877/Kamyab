@@ -20,6 +20,8 @@ import {
   canChangeOwner,
   getOwnerChangeMeta,
   CaseChangeOwnerDialog,
+  getStageSettings,
+  StageSettingsPanel,
 } from "@/modules/cases";
 import { periodPathTitle, PeriodsPanel } from "@/modules/periods";
 import { listActiveCancellationReasons } from "@/modules/settings";
@@ -112,9 +114,6 @@ export default async function ManagerCaseDetailPage({
   const followUps = await listCaseFollowUps(header.id);
   const tasksPanel = <FollowUpTimeline key="tasks" followUps={followUps} />;
 
-  // The task-create form, composed here with this case's presets. Composed only
-  // when the user may create tasks — a slot the server never builds is a slot the
-  // client can never open.
   const canCreateTask = can(user, "tasks.create");
   const taskFormData = canCreateTask ? await getTaskFormData(user) : null;
   const taskForm =
@@ -145,6 +144,15 @@ export default async function ManagerCaseDetailPage({
     />
   );
 
+  const stageSettings = await getStageSettings();
+  const stageSettingsPanel = (
+    <StageSettingsPanel
+      key="stage-settings"
+      initial={stageSettings}
+      canEdit={can(user, "settings.edit")}
+    />
+  );
+
   const cancellable = header.status === "NEW" || header.status === "IN_PROGRESS";
   const canCancel = cancellable && canCancelCase(user, header.ownerId);
   const canRestoreThis = isCancelled && canRestoreCase(user, user.role, header.ownerId);
@@ -170,14 +178,12 @@ export default async function ManagerCaseDetailPage({
 
   return (
     <main className="mx-auto w-full px-4 py-8">
-      {/* Breadcrumb */}
       <div className="mb-4">
         <Link href="/cases" className="text-sm text-primary hover:underline">
           ← بازگشت به پرونده‌ها
         </Link>
       </div>
 
-      {/* Title row + case-level actions */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-text" dir="ltr">
@@ -205,7 +211,6 @@ export default async function ManagerCaseDetailPage({
         </div>
       </div>
 
-      {/* Info card */}
       <section className="mb-4 rounded-card border border-border bg-card p-5 shadow-card">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
@@ -258,7 +263,6 @@ export default async function ManagerCaseDetailPage({
         </dl>
       </section>
 
-      {/* Cancellation detail — only when cancelled */}
       {isCancelled && cancellationDetail && (
         <section className="mb-4 rounded-card border border-error bg-error-bg p-4 shadow-card">
           <h2 className="mb-2 text-xs font-bold text-error">اطلاعات لغو</h2>
@@ -293,7 +297,6 @@ export default async function ManagerCaseDetailPage({
         </section>
       )}
 
-      {/* Two summary cards */}
       {current ? (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <section className="rounded-card border border-border bg-card p-5 shadow-card">
@@ -379,6 +382,8 @@ export default async function ManagerCaseDetailPage({
         paymentsPanel={paymentsPanel}
         tasksPanel={tasksPanel}
         taskForm={taskForm}
+        stageSettingsPanel={stageSettingsPanel}
+        stageSettings={stageSettings}
       />
     </main>
   );

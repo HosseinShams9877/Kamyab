@@ -7,8 +7,10 @@ import {
   UNFOLLOWED_RENEWAL_WINDOW_DAYS,
   isBirthdayToday,
   isReminderDue,
+  isStageReminderDue,
   overdueTasksAlertMessage,
   overdueTasksAlertPrefix,
+  renderStageTemplate,
   renewalReminderMessage,
   unfollowedRenewalMessage,
   unfollowedRenewalPrefix,
@@ -19,6 +21,9 @@ import type {
   GreetingIntent,
   ReminderCandidate,
   ReminderIntent,
+  StageDueCandidate,
+  StageReminderIntent,
+  StageSettings,
 } from "./engine.types";
 
 // The pure heart of the automatic engine (C-14).
@@ -38,6 +43,7 @@ export async function executeEngine(ports: EnginePorts, now: Date): Promise<Engi
     errorDetails: [],
     campaignsProcessed: 0,
     campaignsSent: 0,
+    stageReminders: 0,
   };
 
   const runTask = async (label: string, fn: () => Promise<void>): Promise<void> => {
@@ -63,6 +69,21 @@ export async function executeEngine(ports: EnginePorts, now: Date): Promise<Engi
         if (!intent) continue;
         if (await ports.dispatchReminder(intent)) result.reminders += 1;
       }
+    }
+  });
+
+  // --- Task 1b: stage-due reminders ----------------------------------------
+  await runTask("stageReminders", async () => {
+    const stageCfg = config.stage;
+    if (!stageCfg.enabled) return;
+    if (stageCfg.channels.length === 0 || stageCfg.recipients.length === 0) return;
+
+    const candidates = await ports.listStageDueCandidates();
+    for (const c of candidates) {
+      if (!isStageReminderDue(c.daysRemaining, stageCfg.daysBefore)) continue;
+      const intent = buildStageReminderIntent(c, stageCfg, managerIds, config);
+      if (!intent) continue;
+      if (await ports.dispatchStageReminder(intent)) result.stageReminders += 1;
     }
   });
 
@@ -197,6 +218,53 @@ function resolveNotificationRecipients(
     default:
       return [];
   }
+}
+
+function buildStageReminderIntent(
+  candidate: StageDueCandidate,
+  settings: StageSettings,
+  managerIds: string[],
+  config: { instituteName: string },
+): StageReminderIntent | null {
+  const customerName =
+    candidate.customer.type === "LEGAL"
+      ? candidate.customer.companyName ?? ""
+      : candidate.customer.fullName ?? "";
+
+  const recipientUserIds: string[] = [];
+  for (const r of settings.recipients) {
+    if (r === "CASE_OWNER") recipientUserIds.push(candidate.ownerId);
+    else if (r === "ALL_MANAGERS") recipientUserIds.push(...managerIds);
+  }
+  const uniqueUserIds = Array.from(new Set(recipientUserIds));
+
+  const notificationMessage = renderStageTemplate(settings.notificationTemplate, {
+    stageTitle: candidate.stageTitle,
+    caseNumber: candidate.caseNumber,
+    customerName,
+    daysRemaining: candidate.daysRemaining,
+    instituteName: config.instituteName,
+  });
+
+  const smsBody = candidate.customer.mobile
+    ? renderStageTemplate(settings.smsTemplate, {
+        stageTitle: candidate.stageTitle,
+        caseNumber: candidate.caseNumber,
+        customerName,
+        daysRemaining: candidate.daysRemaining,
+        instituteName: config.instituteName,
+      })
+    : null;
+
+  return {
+    stageId: candidate.stageId,
+    daysBefore: settings.daysBefore,
+    channels: settings.channels,
+    recipientUserIds: uniqueUserIds,
+    notificationMessage,
+    smsRecipient: candidate.customer.mobile || null,
+    smsBody,
+  };
 }
 
 function buildGreetingIntent(

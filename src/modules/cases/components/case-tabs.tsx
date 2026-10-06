@@ -1,38 +1,17 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-// Isomorphic leaf imports (client-component exception): never the periods barrel.
 import type { PeriodRow } from "@/modules/periods/periods.types";
+import type { StageSettings } from "../cases.types";
 import { CaseStages } from "./case-stages";
 
-// The five case-page tabs (C-5). Stages hosts the stage engine; Tasks hosts the
-// follow-up timeline **and the task-create form behind a button**; Periods hosts
-// the period cards + renewal; Payments hosts the financial panel; History is a
-// later-phase placeholder.
-//
-// ## Why the task form lives inside the Tasks tab
-//
-// Creating a task is an action on the case, and the Tasks tab is where the case's
-// tasks are shown. The button that opens the form sits at the start of that
-// panel — the reading edge in RTL — where the thing it acts on is already on
-// screen. A separate tab (or a dialog, or a route transition) would move the user
-// away from the list they are adding to, and would be a second place a form has
-// to stay in sync with this one.
-//
-// The form itself is composed on the server (`taskForm` prop) rather than fetched
-// here, so this component stays a client shell and never imports the tasks
-// module's runtime. A user without `tasks.create` never receives the slot, so an
-// empty panel cannot appear for a user who cannot use it.
-//
-// ## The presets
-//
-// The slot is composed on the server with this case's id and its customer's id,
-// so the form opens with the case already picked. Both fields stay editable — the
-// form's contract is "these are the values we start from" — and the API re-checks
-// the permission and the tenant scope regardless (rule 3). Nothing about the case
-// is passed through the button: the presets are the server's, not the click's.
-
-type TabKey = "stages" | "tasks" | "periods" | "payments" | "history";
+type TabKey =
+  | "stages"
+  | "tasks"
+  | "periods"
+  | "payments"
+  | "history"
+  | "stageSettings";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "stages", label: "مراحل" },
@@ -40,6 +19,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "periods", label: "دوره‌ها و تمدید" },
   { key: "payments", label: "پرداخت‌ها" },
   { key: "history", label: "تاریخچه" },
+  { key: "stageSettings", label: "تنظیمات مراحل" },
 ];
 
 const placeholderClass =
@@ -55,6 +35,8 @@ export function CaseTabs({
   paymentsPanel,
   tasksPanel,
   taskForm,
+  stageSettingsPanel,
+  stageSettings,
 }: {
   current: PeriodRow | null;
   canEdit: boolean;
@@ -64,17 +46,15 @@ export function CaseTabs({
   periodsPanel: ReactNode;
   paymentsPanel: ReactNode;
   tasksPanel: ReactNode;
-  /** The task-create form, composed on the server with this case's presets. */
   taskForm: ReactNode;
+  stageSettingsPanel: ReactNode;
+  stageSettings: StageSettings;
 }) {
   const [active, setActive] = useState<TabKey>("stages");
-  // The form is closed until the user asks for it, so the tab opens on the list
-  // — which is what the user came for — rather than on an empty form.
   const [taskFormOpen, setTaskFormOpen] = useState(false);
 
   return (
     <div>
-      {/* Tab bar: scrolls horizontally on narrow screens, ≥44px touch targets. */}
       <div
         role="tablist"
         className="mb-4 flex gap-1 overflow-x-auto border-b border-border"
@@ -107,16 +87,12 @@ export function CaseTabs({
           canEdit={canEdit}
           canAddStage={canAddStage}
           isCancelled={isCancelled}
+          stageSettings={stageSettings}
         />
       )}
 
       {active === "tasks" && (
         <div className="space-y-4">
-          {/* The action sits at the reading edge of the panel it acts on. In RTL
-              that is the right side, which is `justify-start` — `justify-end`
-              would push it to the left, which is the trailing edge here. The
-              permission gates the button here and the slot on the server, so a
-              user without `tasks.create` sees neither. */}
           {canCreateTask && !taskFormOpen && (
             <div className="flex justify-start">
               <button
@@ -154,6 +130,7 @@ export function CaseTabs({
       {active === "history" && (
         <div className={placeholderClass}>تاریخچه در فاز بعدی افزوده می‌شود.</div>
       )}
+      {active === "stageSettings" && stageSettingsPanel}
     </div>
   );
 }

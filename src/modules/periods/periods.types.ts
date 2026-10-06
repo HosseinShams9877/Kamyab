@@ -14,6 +14,7 @@ export type StageRow = {
   isExceptional: boolean;
   startDate: string | null;
   endDate: string | null;
+  dueDate: string | null;
   attemptCount: number;
   note: string | null;
   lastChangedByName: string | null;
@@ -182,4 +183,21 @@ export type EngineUnfollowedRenewal = {
   caseNumber: string;
   ownerId: string;
   daysRemaining: number;
+};
+export type StageDueCandidate = {
+  stageId: string;
+  stageTitle: string;
+  order: number;
+  caseId: string;
+  caseNumber: string;
+  periodId: string;
+  ownerId: string;
+  daysRemaining: number;
+  dueJalali: string | null;
+  customer: {
+    type: string;
+    fullName: string | null;
+    companyName: string | null;
+    mobile: string;
+  };
 };

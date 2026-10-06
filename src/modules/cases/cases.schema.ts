@@ -181,3 +181,39 @@ export const caseChangeOwnerSchema = z.object({
 });
 
 export type CaseChangeOwnerInput = z.infer<typeof caseChangeOwnerSchema>;
+
+// --- Stage due date + settings (تب تنظیمات مراحل) ---------------------------
+
+export const setStageDueDateSchema = z.object({
+  dueDate: z
+    .string()
+    .transform((v) => toEnglishDigits(v.trim()))
+    .refine((v) => v === "" || parseJalali(v) !== null, {
+      message: "تاریخ سررسید معتبر نیست.",
+    }),
+});
+export type SetStageDueDateInput = z.infer<typeof setStageDueDateSchema>;
+
+export const stageSettingsSchema = z.object({
+  enabled: z.boolean(),
+  daysBefore: z
+    .union([z.string(), z.number()])
+    .transform((v) => (typeof v === "number" ? v : Number(toEnglishDigits(v.trim()))))
+    .refine((v) => Number.isInteger(v) && v >= 1 && v <= 90, {
+      message: "تعداد روز باید بین ۱ تا ۹۰ باشد.",
+    }),
+  channels: z.array(z.enum(["INTERNAL_NOTIFICATION", "SMS_TO_CUSTOMER"])).min(1, {
+    message: "حداقل یک کانال انتخاب کنید.",
+  }),
+  recipients: z.array(z.enum(["CASE_OWNER", "ALL_MANAGERS"])).min(1, {
+    message: "حداقل یک دریافت‌کننده انتخاب کنید.",
+  }),
+  autoPrompt: z.boolean(),
+  notificationTemplate: z
+    .string()
+    .trim()
+    .min(1, { message: "متن اعلان الزامی است." })
+    .max(1000),
+  smsTemplate: z.string().trim().min(1, { message: "متن پیامک الزامی است." }).max(500),
+});
+export type StageSettingsInput = z.infer<typeof stageSettingsSchema>;

@@ -8,6 +8,7 @@ import * as customers from "@/modules/customers";
 import * as employees from "@/modules/employees";
 import * as settings from "@/modules/settings";
 import * as campaigns from "@/modules/campaigns";
+import { getStageSettings } from "@/modules/cases";
 
 import { executeEngine } from "./engine.orchestrator";
 import * as repo from "./engine.repository";
@@ -16,24 +17,44 @@ import type {
   EnginePorts,
   EngineRunResult,
   SmsLogView,
+  StageSettings,
 } from "./engine.types";
 
 // Production wiring for the automatic engine (C-14).
 
 export async function buildRealPorts(now: Date): Promise<EnginePorts> {
-  const [instituteName, thresholds, birthday, gateway, apiKey, templateRows, managerIds] =
-    await Promise.all([
-      settings.getInstituteName(),
-      settings.getThresholds(),
-      settings.getBirthday(),
-      settings.getGateway(),
-      settings.getSetting<string>("sms_api_key"),
-      settings.listTemplates(),
-      employees.listActiveManagerIds(),
-    ]);
+  const [
+    instituteName,
+    thresholds,
+    birthday,
+    gateway,
+    apiKey,
+    templateRows,
+    managerIds,
+    stageSettings,
+  ] = await Promise.all([
+    settings.getInstituteName(),
+    settings.getThresholds(),
+    settings.getBirthday(),
+    settings.getGateway(),
+    settings.getSetting<string>("sms_api_key"),
+    settings.listTemplates(),
+    employees.listActiveManagerIds(),
+    getStageSettings(),
+  ]);
 
   const templates: Record<string, string> = {};
   for (const t of templateRows) templates[t.eventKey] = t.body;
+
+  const stage: StageSettings = {
+    enabled: stageSettings.enabled,
+    daysBefore: stageSettings.daysBefore,
+    channels: stageSettings.channels,
+    recipients: stageSettings.recipients,
+    autoPrompt: stageSettings.autoPrompt,
+    notificationTemplate: stageSettings.notificationTemplate,
+    smsTemplate: stageSettings.smsTemplate,
+  };
 
   const config: EngineConfig = {
     instituteName,
@@ -41,6 +62,7 @@ export async function buildRealPorts(now: Date): Promise<EnginePorts> {
     birthday: { enabled: birthday.enabled, sendHour: birthday.sendHour },
     realSend: gateway.realSend,
     templates,
+    stage,
   };
 
   const smsGateway = createSmsGateway({
@@ -55,6 +77,9 @@ export async function buildRealPorts(now: Date): Promise<EnginePorts> {
 
     listReminderCandidates: () => periods.listReminderCandidates(now),
     dispatchReminder: (intent) => repo.dispatchReminder(intent),
+
+    listStageDueCandidates: () => periods.listStageDueCandidates(now),
+    dispatchStageReminder: (intent) => repo.dispatchStageReminder(intent),
 
     listOverdueOwners: () => tasks.listOverdueOwners(now),
     createAlertIfAbsent: (intent) => repo.createAlertIfAbsent(intent, now),
@@ -126,6 +151,7 @@ export type EngineRunView = {
   errorDetails: string[];
   campaignsProcessed: number;
   campaignsSent: number;
+  stageReminders: number;
 };
 
 function toRunView(row: repo.RunLogRow): EngineRunView {
@@ -139,6 +165,7 @@ function toRunView(row: repo.RunLogRow): EngineRunView {
   let errorDetails: string[] = [];
   let campaignsProcessed = 0;
   let campaignsSent = 0;
+  let stageReminders = 0;
   if (row.detail) {
     try {
       const parsed = JSON.parse(row.detail) as {
@@ -147,12 +174,14 @@ function toRunView(row: repo.RunLogRow): EngineRunView {
         errorDetails?: string[];
         campaignsProcessed?: number;
         campaignsSent?: number;
+        stageReminders?: number;
       };
       overdueAlerts = parsed.overdueAlerts ?? 0;
       unfollowedAlerts = parsed.unfollowedAlerts ?? 0;
       errorDetails = Array.isArray(parsed.errorDetails) ? parsed.errorDetails : [];
       campaignsProcessed = parsed.campaignsProcessed ?? 0;
       campaignsSent = parsed.campaignsSent ?? 0;
+      stageReminders = parsed.stageReminders ?? 0;
     } catch {
       // ignore
     }
@@ -173,6 +202,7 @@ function toRunView(row: repo.RunLogRow): EngineRunView {
     errorDetails,
     campaignsProcessed,
     campaignsSent,
+    stageReminders,
   };
 }
 

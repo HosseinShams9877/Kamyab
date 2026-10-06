@@ -30,6 +30,20 @@ export function isReminderDue(daysRemaining: number, daysBefore: number): boolea
 }
 
 /**
+ * Whether a stage-due reminder is due today. Same "≤" window as renewals: the
+ * reminder becomes due the moment we enter its window (daysRemaining ≤ daysBefore,
+ * inclusive), stays due on every run until the stage is completed (which removes
+ * it from the candidate list), and each (stage, daysBefore, channel) fires at most
+ * once thanks to the StageReminderLog unique index.
+ */
+export function isStageReminderDue(
+  daysRemaining: number,
+  daysBefore: number,
+): boolean {
+  return daysRemaining <= daysBefore;
+}
+
+/**
  * Whether `today` (Jalali) is the anniversary of `birth` (a birth or founding
  * date), matching on month + day only — the year is always different. A customer
  * whose date is 30 Esfand (a day that exists only in a leap year) is greeted on 29
@@ -79,4 +93,23 @@ export function unfollowedRenewalPrefix(caseNumber: string): string {
 export function unfollowedRenewalMessage(caseNumber: string, daysRemaining: number): string {
   const days = toPersianDigits(String(Math.max(daysRemaining, 0)));
   return `${unfollowedRenewalPrefix(caseNumber)}: ${days} روز تا انقضا باقی مانده و هنوز پیگیری نشده است.`;
+}
+
+/** Render a stage-due notification/SMS template with the given variables. */
+export function renderStageTemplate(
+  template: string,
+  vars: {
+    stageTitle: string;
+    caseNumber: string;
+    customerName: string;
+    daysRemaining: number;
+    instituteName: string;
+  },
+): string {
+  return template
+    .replace(/\{stageTitle\}/g, vars.stageTitle)
+    .replace(/\{caseNumber\}/g, toPersianDigits(vars.caseNumber))
+    .replace(/\{customerName\}/g, vars.customerName)
+    .replace(/\{daysRemaining\}/g, toPersianDigits(String(Math.max(vars.daysRemaining, 0))))
+    .replace(/\{instituteName\}/g, vars.instituteName);
 }

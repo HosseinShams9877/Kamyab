@@ -1,7 +1,7 @@
 import {
   findSetting,
   findSettings,
-  saveSettings,
+  saveSettings as saveSettingsRepo,
   listItems as repoListItems,
   nextOrder,
   createItem,
@@ -224,6 +224,13 @@ export async function testGateway(): Promise<{ ok: boolean; message: string }> {
 }
 
 // APPEND_SERVICE_2
+
+/** Write a batch of settings (key → JSON-serialized value). */
+export async function saveSettings(
+  entries: Record<string, string>,
+): Promise<void> {
+  await saveSettingsRepo(entries);
+}
 
 // ---------------------------------------------------------------------------
 // SMS templates + status (B-10, C-13)

@@ -25,6 +25,7 @@ export {
   updateListItem,
   moveListItem,
   deleteListItem,
+  saveSettings,
   SettingsRuleError,
 } from "./settings.service";
 

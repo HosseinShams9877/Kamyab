@@ -126,3 +126,18 @@ export type OwnerChangeMeta = {
 export type ChangeOwnerResult =
   | { ok: true; movedTasks: number }
   | { ok: false; code: 403 | 404 | 409 | 422; message: string };
+
+  // --- Stage due dates & reminders (تب تنظیمات مراحل) -------------------------
+
+export type StageReminderChannel = "INTERNAL_NOTIFICATION" | "SMS_TO_CUSTOMER";
+export type StageReminderRecipient = "CASE_OWNER" | "ALL_MANAGERS";
+
+export type StageSettings = {
+  enabled: boolean;
+  daysBefore: number;
+  channels: StageReminderChannel[];
+  recipients: StageReminderRecipient[];
+  autoPrompt: boolean;
+  notificationTemplate: string;
+  smsTemplate: string;
+};

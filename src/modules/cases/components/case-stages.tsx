@@ -8,13 +8,8 @@ import {
   STAGE_STATUS_LABELS,
   STAGE_STATUS_BADGE,
 } from "@/modules/periods/lib/labels";
-
-// The interactive Path card (C-6): a horizontal stage strip, the current-stage
-// line, and a vertical list with the six actions per stage. Progress and the
-// current stage are computed here from the stage rows (rule 2 — never stored).
-// A client leaf: it imports only isomorphic leaves and calls the guarded stage
-// API routes, then refreshes the server component. The server still gates every
-// action (rule 3); `canEdit`/`canAddStage` only decide button visibility.
+import { JalaliDatePicker } from "@/components/ui/jalali-date-picker";
+import type { StageSettings } from "../cases.types";
 
 const OPEN_STATUSES = ["PENDING", "IN_PROGRESS", "REJECTED"];
 const badge = "rounded-badge px-2 py-0.5 text-xs whitespace-nowrap";
@@ -33,12 +28,14 @@ export function CaseStages({
   canEdit,
   canAddStage,
   isCancelled,
+  stageSettings,
 }: {
   stages: StageRow[];
   periodId: string | null;
   canEdit: boolean;
   canAddStage: boolean;
   isCancelled: boolean;
+  stageSettings: StageSettings;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -46,6 +43,11 @@ export function CaseStages({
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<NoteEditor>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [dueDialog, setDueDialog] = useState<{
+    stageId: string;
+    value: string;
+  } | null>(null);
+  const [pendingAutoPrompt, setPendingAutoPrompt] = useState<string | null>(null);
 
   const ordered = [...stages].sort((a, b) => a.order - b.order);
   const currentId = ordered.find((s) => OPEN_STATUSES.includes(s.status))?.id ?? null;
@@ -79,34 +81,67 @@ export function CaseStages({
     }
   }
 
-  const action = (stageId: string, op: string, note?: string) =>
-    call("POST", `/api/cases/stages/${stageId}`, { op, note });
+  const action = async (stageId: string, op: string, note?: string) => {
+    await call("POST", `/api/cases/stages/${stageId}`, { op, note });
+    if (op === "done" && stageSettings.autoPrompt) {
+      const currentOrder = ordered.find((s) => s.id === stageId)?.order ?? -1;
+      const next = ordered.find(
+        (s) => s.order > currentOrder && OPEN_STATUSES.includes(s.status),
+      );
+      if (next) {
+        setPendingAutoPrompt(next.id);
+        setDueDialog({ stageId: next.id, value: next.dueDate ?? "" });
+      }
+    }
+  };
+
   const move = (stageId: string, op: "move_up" | "move_down") =>
     call("PATCH", `/api/cases/stages/${stageId}`, { op });
-  const remove = (stageId: string) => call("DELETE", `/api/cases/stages/${stageId}`);
+  const remove = (stageId: string) =>
+    call("DELETE", `/api/cases/stages/${stageId}`);
   const add = () => {
     if (!periodId || !newTitle.trim()) return;
     call("POST", "/api/cases/stages", { periodId, title: newTitle.trim() });
   };
 
-  /** Circle fill for one stage in the horizontal strip. */
-  function circleClass(status: string, isCurrent: boolean): string {
-  const ring = isCurrent ? " ring-4 ring-primary/30" : "";
-  switch (status) {
-    case "DONE":
-      return "bg-success text-white" + ring;
-    case "REJECTED":
-      return "bg-error text-white" + ring;
-    case "NOT_NEEDED":
-      return "bg-disabled-bg text-text-secondary" + ring;
-    case "IN_PROGRESS":
-      return "bg-primary text-white" + ring;
-    default:
-      return "bg-page text-text-secondary border border-border" + ring;
+  async function saveDue(stageId: string, value: string) {
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/cases/stages/${stageId}/due-date`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dueDate: value }),
+      });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(d.message ?? "ثبت سررسید انجام نشد.");
+        return;
+      }
+      setDueDialog(null);
+      setPendingAutoPrompt(null);
+      startTransition(() => router.refresh());
+    } finally {
+      setBusy(false);
+    }
   }
-}
 
-  /** Connector color between stage N and N+1. */
+  function circleClass(status: string, isCurrent: boolean): string {
+    const ring = isCurrent ? " ring-4 ring-primary/30" : "";
+    switch (status) {
+      case "DONE":
+        return "bg-success text-white" + ring;
+      case "REJECTED":
+        return "bg-error text-white" + ring;
+      case "NOT_NEEDED":
+        return "bg-disabled-bg text-text-secondary" + ring;
+      case "IN_PROGRESS":
+        return "bg-primary text-white" + ring;
+      default:
+        return "bg-page text-text-secondary border border-border" + ring;
+    }
+  }
+
   function connectorClass(status: string): string {
     return status === "DONE" || status === "NOT_NEEDED"
       ? "bg-success"
@@ -115,201 +150,61 @@ export function CaseStages({
         : "bg-border";
   }
 
-  return (
-    <div className="space-y-4">
-      {ordered.length > 0 && (
-        <>
-          {/* Horizontal stage strip — line + circles, scrolls on narrow screens. */}
-          <div className="overflow-x-auto py-4">
-  <div className="flex min-w-min items-center gap-2 px-2">
-              {ordered.map((s, i) => (
-                <div key={s.id} className="flex items-center gap-2">
-                  <div
-                    title={s.title}
-                    aria-label={s.title}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium transition-all ${circleClass(
-                      s.status,
-                      s.id === currentId,
-                    )}`}
-                  >
-                    {toPersianDigits(String(s.order))}
-                  </div>
-                  {i < ordered.length - 1 && (
-                    <div
-                      className={`h-0.5 w-6 shrink-0 rounded-full ${connectorClass(s.status)}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Current-stage line + progress bar */}
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <div className="text-text-secondary">
-                {current ? (
-                  <>
-                    مرحله فعلی:{" "}
-                    <span className="font-medium text-text">{current.title}</span>
-                  </>
-                ) : (
-                  <span className="font-medium text-success">
-                    همهٔ مراحل انجام شد
-                  </span>
-                )}
-              </div>
-              <div className="text-text-secondary" dir="rtl">
-                {toPersianDigits(String(passed))} از {toPersianDigits(String(total))} مرحله
-                {" · "}
-                <span className="font-medium text-text">
-                  {toPersianDigits(String(percent))}٪
-                </span>
-              </div>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-badge bg-page">
-              <div
-                className="h-full rounded-badge bg-primary transition-all"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-          </div>
-        </>
-      )}
-
-      {error && (
-        <p className="rounded-control bg-error-bg px-3 py-2 text-sm text-error">
-          {error}
-        </p>
-      )}
-
-      {ordered.length === 0 && !(canAddStage && periodId) && (
-        <div className={placeholder}>برای این پرونده مرحله‌ای تعریف نشده است.</div>
-      )}
-
-      {/* Vertical stage list */}
-      <ul className="space-y-2">
-        {ordered.map((s) => {
-          const isCurrent = s.id === currentId;
-          return (
-            <li
-              key={s.id}
-              className={`rounded-card border bg-card p-3 shadow-card transition-colors ${
-                isCurrent ? "border-primary" : "border-border"
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${circleClass(
-                      s.status,
-                      false,
-                    )}`}
-                  >
-                    {toPersianDigits(String(s.order))}
-                  </span>
-                  <span
-                    className={`text-sm ${
-                      s.status === "NOT_NEEDED"
-                        ? "text-text-secondary line-through"
-                        : "text-text"
-                    }`}
-                  >
-                    {s.title}
-                  </span>
-                  {s.isExceptional && (
-                    <span className={`${badge} bg-info-bg text-info`}>استثنائی</span>
-                  )}
-                  {s.attemptCount > 1 && (
-                    <span className={`${badge} bg-warning-bg text-warning`}>
-                      {toPersianDigits(String(s.attemptCount))} تلاش
-                    </span>
-                  )}
-                </div>
-                <span className={`${badge} ${STAGE_STATUS_BADGE[s.status]}`}>
-                  {STAGE_STATUS_LABELS[s.status]}
-                </span>
-              </div>
-
-              <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
-                {s.startDate && (
-                  <div className="flex gap-1">
-                    <dt>شروع:</dt>
-                    <dd dir="ltr">{toPersianDigits(s.startDate)}</dd>
-                  </div>
-                )}
-                {s.endDate && (
-                  <div className="flex gap-1">
-                    <dt>پایان:</dt>
-                    <dd dir="ltr">{toPersianDigits(s.endDate)}</dd>
-                  </div>
-                )}
-                {s.lastChangedByName && (
-                  <div className="flex gap-1">
-                    <dt>آخرین تغییر:</dt>
-                    <dd>{s.lastChangedByName}</dd>
-                  </div>
-                )}
-              </dl>
-
-              {s.note && (
-                <p className="mt-2 rounded-control bg-page px-3 py-2 text-xs text-text">
-                  {s.note}
-                </p>
-              )}
-
-              {renderActions(s)}
-            </li>
-          );
-        })}
-      </ul>
-
-      {canAddStage && periodId && (
-        <div className="flex flex-wrap items-center gap-2 pt-2">
-          <input
-            type="text"
-            dir="rtl"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="عنوان مرحلهٔ استثنائی"
-            maxLength={200}
-            disabled={working || isCancelled}
-            className="min-h-[44px] flex-1 rounded-control border border-border bg-card px-3 text-sm text-text placeholder:text-text-secondary disabled:opacity-50"
-          />
-          <button
-            type="button"
-            onClick={add}
-            disabled={working || isCancelled || !newTitle.trim()}
-            className="min-h-[44px] rounded-control bg-primary px-4 text-sm text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            افزودن مرحله
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // Per-stage action buttons. Shown only when the user may act (canEdit for the
-  // six actions, canAddStage for reorder/delete of an exceptional stage); a
-  // cancelled case shows them disabled (C-6 blocked state).
   function renderActions(s: StageRow) {
     const isOpen = OPEN_STATUSES.includes(s.status);
     const disabled = working || isCancelled;
     const acts = canEdit
       ? [
-          { key: "start", label: "شروع", show: s.status === "PENDING", on: () => action(s.id, "start") },
-          { key: "done", label: "اتمام", show: isOpen, on: () => action(s.id, "done") },
-          { key: "reject", label: "رد", show: isOpen, on: () => setEditor({ stageId: s.id, op: "reject", value: "" }) },
-          { key: "not_needed", label: "نیازی نیست", show: isOpen, on: () => action(s.id, "not_needed") },
-          { key: "reopen", label: "بازگشایی", show: !isOpen, on: () => action(s.id, "reopen") },
-          { key: "note", label: "یادداشت", show: true, on: () => setEditor({ stageId: s.id, op: "note", value: s.note ?? "" }) },
+          {
+            key: "start",
+            label: "شروع",
+            show: s.status === "PENDING",
+            on: () => action(s.id, "start"),
+          },
+          {
+            key: "done",
+            label: "اتمام",
+            show: isOpen,
+            on: () => action(s.id, "done"),
+          },
+          {
+            key: "reject",
+            label: "رد",
+            show: isOpen,
+            on: () => setEditor({ stageId: s.id, op: "reject", value: "" }),
+          },
+          {
+            key: "not_needed",
+            label: "نیازی نیست",
+            show: isOpen,
+            on: () => action(s.id, "not_needed"),
+          },
+          {
+            key: "reopen",
+            label: "بازگشایی",
+            show: !isOpen,
+            on: () => action(s.id, "reopen"),
+          },
+          {
+            key: "note",
+            label: "یادداشت",
+            show: true,
+            on: () =>
+              setEditor({ stageId: s.id, op: "note", value: s.note ?? "" }),
+          },
         ]
       : [];
     const canMove = canAddStage && s.isExceptional;
     const canDelete = canMove && s.status === "PENDING" && s.attemptCount === 0;
     const visible = acts.filter((a) => a.show);
-    if (visible.length === 0 && !canMove && !canDelete && editor?.stageId !== s.id) {
+    const hasDueButton = canEdit;
+    if (
+      visible.length === 0 &&
+      !canMove &&
+      !canDelete &&
+      !hasDueButton &&
+      editor?.stageId !== s.id
+    ) {
       return null;
     }
     return (
@@ -326,6 +221,16 @@ export function CaseStages({
               {a.label}
             </button>
           ))}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setDueDialog({ stageId: s.id, value: s.dueDate ?? "" })}
+              disabled={disabled}
+              className={btn}
+            >
+              {s.dueDate ? "ویرایش سررسید" : "تعیین سررسید"}
+            </button>
+          )}
           {canMove && (
             <>
               <button
@@ -399,4 +304,218 @@ export function CaseStages({
       </div>
     );
   }
+
+  return (
+    <div className="space-y-4">
+      {ordered.length > 0 && (
+        <>
+          <div className="overflow-x-auto py-4">
+            <div className="flex min-w-min items-center gap-2 px-2">
+              {ordered.map((s, i) => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <div
+                    title={s.title}
+                    aria-label={s.title}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium transition-all ${circleClass(
+                      s.status,
+                      s.id === currentId,
+                    )}`}
+                  >
+                    {toPersianDigits(String(s.order))}
+                  </div>
+                  {i < ordered.length - 1 && (
+                    <div
+                      className={`h-0.5 w-6 shrink-0 rounded-full ${connectorClass(s.status)}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <div className="text-text-secondary">
+                {current ? (
+                  <>
+                    مرحله فعلی:{" "}
+                    <span className="font-medium text-text">{current.title}</span>
+                  </>
+                ) : (
+                  <span className="font-medium text-success">
+                    همهٔ مراحل انجام شد
+                  </span>
+                )}
+              </div>
+              <div className="text-text-secondary" dir="rtl">
+                {toPersianDigits(String(passed))} از {toPersianDigits(String(total))}{" "}
+                مرحله
+                {" · "}
+                <span className="font-medium text-text">
+                  {toPersianDigits(String(percent))}٪
+                </span>
+              </div>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-badge bg-page">
+              <div
+                className="h-full rounded-badge bg-primary transition-all"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {error && (
+        <p className="rounded-control bg-error-bg px-3 py-2 text-sm text-error">
+          {error}
+        </p>
+      )}
+
+      {ordered.length === 0 && !(canAddStage && periodId) && (
+        <div className={placeholder}>برای این پرونده مرحله‌ای تعریف نشده است.</div>
+      )}
+
+      <ul className="space-y-2">
+        {ordered.map((s) => {
+          const isCurrent = s.id === currentId;
+          return (
+            <li
+              key={s.id}
+              className={`rounded-card border bg-card p-3 shadow-card transition-colors ${
+                isCurrent ? "border-primary" : "border-border"
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${circleClass(
+                      s.status,
+                      false,
+                    )}`}
+                  >
+                    {toPersianDigits(String(s.order))}
+                  </span>
+                  <span
+                    className={`text-sm ${
+                      s.status === "NOT_NEEDED"
+                        ? "text-text-secondary line-through"
+                        : "text-text"
+                    }`}
+                  >
+                    {s.title}
+                  </span>
+                  {s.isExceptional && (
+                    <span className={`${badge} bg-info-bg text-info`}>استثنائی</span>
+                  )}
+                  {s.attemptCount > 1 && (
+                    <span className={`${badge} bg-warning-bg text-warning`}>
+                      {toPersianDigits(String(s.attemptCount))} تلاش
+                    </span>
+                  )}
+                </div>
+                <span className={`${badge} ${STAGE_STATUS_BADGE[s.status]}`}>
+                  {STAGE_STATUS_LABELS[s.status]}
+                </span>
+              </div>
+
+              <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
+                {s.startDate && (
+                  <div className="flex gap-1">
+                    <dt>شروع:</dt>
+                    <dd dir="ltr">{toPersianDigits(s.startDate)}</dd>
+                  </div>
+                )}
+                {s.endDate && (
+                  <div className="flex gap-1">
+                    <dt>پایان:</dt>
+                    <dd dir="ltr">{toPersianDigits(s.endDate)}</dd>
+                  </div>
+                )}
+                {s.dueDate && (
+                  <div className="flex gap-1">
+                    <dt>سررسید:</dt>
+                    <dd dir="ltr">{toPersianDigits(s.dueDate)}</dd>
+                  </div>
+                )}
+                {s.lastChangedByName && (
+                  <div className="flex gap-1">
+                    <dt>آخرین تغییر:</dt>
+                    <dd>{s.lastChangedByName}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {s.note && (
+                <p className="mt-2 rounded-control bg-page px-3 py-2 text-xs text-text">
+                  {s.note}
+                </p>
+              )}
+
+              {renderActions(s)}
+            </li>
+          );
+        })}
+      </ul>
+
+      {canAddStage && periodId && (
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          <input
+            type="text"
+            dir="rtl"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="عنوان مرحلهٔ استثنائی"
+            maxLength={200}
+            disabled={working || isCancelled}
+            className="min-h-[44px] flex-1 rounded-control border border-border bg-card px-3 text-sm text-text placeholder:text-text-secondary disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={add}
+            disabled={working || isCancelled || !newTitle.trim()}
+            className="min-h-[44px] rounded-control bg-primary px-4 text-sm text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            افزودن مرحله
+          </button>
+        </div>
+      )}
+
+      {dueDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="w-full max-w-sm rounded-card border border-border bg-card p-5 shadow-card">
+            <h3 className="mb-3 text-base font-bold text-text">
+              {pendingAutoPrompt ? "تعیین سررسید مرحلهٔ بعد" : "تعیین سررسید مرحله"}
+            </h3>
+            <JalaliDatePicker
+              value={dueDialog.value}
+              onChange={(v) => setDueDialog({ ...dueDialog, value: v })}
+              placeholder="۱۴۰۵/۰۷/۰۱"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDueDialog(null);
+                  setPendingAutoPrompt(null);
+                }}
+                className={btn}
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={() => saveDue(dueDialog.stageId, dueDialog.value)}
+                disabled={working}
+                className={btnPrimary}
+              >
+                ثبت
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

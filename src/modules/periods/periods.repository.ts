@@ -14,13 +14,6 @@ import type {
 // cases module's transaction — rule 4). No Persian text in this layer; it deals
 // in ids, Date objects, and raw columns.
 
-/**
- * Create a case's first period and copy the service's initial path stages onto
- * it, on a caller-owned transaction (rule 4). The first stage becomes
- * IN_PROGRESS (with startedAt), the rest PENDING. When there are no stages the
- * period is still created (a case with no path — B-2: no error, the path card
- * is simply not shown). indexNumber is 1 (registration).
- */
 export async function createRegistrationPeriodTx(
   tx: Prisma.TransactionClient,
   input: RegistrationPeriodInput,
@@ -277,6 +270,7 @@ export type PeriodWithDetail = {
     isExceptional: boolean;
     startedAt: Date | null;
     endedAt: Date | null;
+    dueDate: Date | null;
     attemptCount: number;
     note: string | null;
     lastChangedBy: { fullName: string } | null;
@@ -302,6 +296,7 @@ const PERIOD_SELECT = {
       isExceptional: true,
       startedAt: true,
       endedAt: true,
+      dueDate: true,
       attemptCount: true,
       note: true,
       lastChangedBy: { select: { fullName: true } },
@@ -542,8 +537,6 @@ export async function moveStageTx(
 
 // --- Stage engine: completion check -----------------------------------------
 
-/** Whether a period still has any open (non-closed) stage. Used by the cases
- *  service to decide whether to flip Case.status to COMPLETED after a Done. */
 export async function periodHasOpenStages(
   tx: Prisma.TransactionClient,
   periodId: string,
@@ -555,4 +548,108 @@ export async function periodHasOpenStages(
     },
   });
   return open > 0;
+}
+
+// --- Stage due dates (تب تنظیمات مراحل) ------------------------------------
+
+export async function setStageDueDateTx(
+  tx: Prisma.TransactionClient,
+  stageId: string,
+  dueDate: Date | null,
+): Promise<void> {
+  await tx.caseStage.update({
+    where: { id: stageId },
+    data: { dueDate },
+  });
+}
+
+export async function findStageForDueDate(stageId: string): Promise<{
+  caseId: string;
+  periodId: string;
+  status: string;
+} | null> {
+  const row = await prisma.caseStage.findUnique({
+    where: { id: stageId },
+    select: { periodId: true, status: true, period: { select: { caseId: true } } },
+  });
+  if (!row) return null;
+  return {
+    caseId: row.period.caseId,
+    periodId: row.periodId,
+    status: row.status,
+  };
+}
+
+export type StageDueCandidateRow = {
+  id: string;
+  title: string;
+  order: number;
+  dueDate: Date | null;
+  periodId: string;
+  period: {
+    case: {
+      id: string;
+      number: string;
+      ownerId: string;
+      customer: {
+        type: string;
+        fullName: string | null;
+        companyName: string | null;
+        mobile: string;
+      };
+    };
+  };
+};
+
+export async function findStageDueCandidates(): Promise<StageDueCandidateRow[]> {
+  return prisma.caseStage.findMany({
+    where: {
+      dueDate: { not: null },
+      status: { in: ["PENDING", "IN_PROGRESS", "REJECTED"] },
+      period: {
+        status: "ACTIVE",
+        case: { status: { not: "CANCELLED" } },
+      },
+    },
+    select: {
+      id: true,
+      title: true,
+      order: true,
+      dueDate: true,
+      periodId: true,
+      period: {
+        select: {
+          case: {
+            select: {
+              id: true,
+              number: true,
+              ownerId: true,
+              customer: {
+                select: {
+                  type: true,
+                  fullName: true,
+                  companyName: true,
+                  mobile: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+export async function createStageReminderLog(args: {
+  stageId: string;
+  daysBefore: number;
+  channel: string;
+}): Promise<void> {
+  await prisma.stageReminderLog.create({
+    data: {
+      stageId: args.stageId,
+      daysBefore: args.daysBefore,
+      channel: args.channel,
+    },
+  });
 }
