@@ -10,11 +10,12 @@ function requiredId(message: string) {
 
 const optionalJalali = (msg: string) =>
   z
-    .string()
-    .transform((v) => toEnglishDigits(v.trim()))
-    .refine((v) => v === "" || parseJalali(v) !== null, { message: "تاریخ معتبر نیست." })
-    .optional()
-    .or(z.literal(""));
+    .union([z.string(), z.null()])
+    .transform((v) => (v === null ? "" : toEnglishDigits(v.trim())))
+    .refine((v) => v === "" || parseJalali(v) !== null, {
+      message: "تاریخ معتبر نیست.",
+    })
+    .optional();
 
 const audienceFilterSchema = z.object({
   customerType: z.enum(["NATURAL", "LEGAL"]).nullable().optional(),
