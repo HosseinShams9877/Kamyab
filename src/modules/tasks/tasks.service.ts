@@ -35,6 +35,7 @@ import type {
   TaskListParams,
   TaskServiceOption,
   TaskCaseOption,
+  StageReminderRow,
 } from "./tasks.types";
 
 // Business logic for the tasks domain (C-11).
@@ -162,14 +163,17 @@ function normalizeQuery(q: string): string {
 }
 
 /**
- * The task rows for one of the seven tabs (C-11), ownership-scoped (rule 3),
- * with optional filters (search, owner, service, priority).
+ * The task rows for one of the tabs (C-11), ownership-scoped (rule 3), with
+ * optional filters (search, owner, service, priority). The "reminders" tab is
+ * rendered separately (see getStageRemindersView) and returns an empty list here.
  */
 export async function getTasksView(
   user: Authorizable,
   tab: TaskTab,
   params: TaskListParams = {},
 ): Promise<TaskRow[]> {
+  if (tab === "reminders") return [];
+
   const scope = scopeByOwnership(user, "tasks");
   if (scope === null) return [];
 
@@ -435,4 +439,46 @@ export async function listOverdueOwners(
     else byOwner.set(r.ownerId, { ownerId: r.ownerId, ownerName: r.ownerName, count: 1 });
   }
   return [...byOwner.values()];
+}
+
+// --- Stage-due reminders tab (تب یادآوری‌ها) --------------------------------
+
+/**
+ * Rows for the "یادآوری‌ها" tab: open stages with a due date on an active
+ * period of a non-cancelled case, ownership-scoped (rule 3). This is a
+ * read-only view over CaseStage.dueDate — no writes, no engine involvement.
+ */
+export async function getStageRemindersView(
+  user: Authorizable,
+): Promise<StageReminderRow[]> {
+  const scope = scopeByOwnership(user, "tasks");
+  if (scope === null) return [];
+
+  const ownerId = "ownerId" in scope ? scope.ownerId : undefined;
+  const rows = await repo.findStageDueTasks(ownerId);
+
+  const todayJ = todayJalali();
+  const todayStart = toGregorianDate(todayJ);
+  const todayEnd = new Date(todayStart.getTime() + 86_400_000);
+
+  return rows.map((r) => {
+    const due = r.dueDate!;
+    const daysRemaining = Math.round(
+      (due.getTime() - todayStart.getTime()) / 86_400_000,
+    );
+    const c = r.period.case.customer;
+    return {
+      stageId: r.id,
+      stageTitle: r.title,
+      caseId: r.period.case.id,
+      caseNumber: r.period.case.number,
+      customerName: c.type === "LEGAL" ? c.companyName ?? "—" : c.fullName ?? "—",
+      serviceName: r.period.case.service.name,
+      ownerName: r.period.case.owner.fullName,
+      dueDate: dateToJalali(due),
+      daysRemaining,
+      isPast: due < todayStart,
+      isToday: due >= todayStart && due < todayEnd,
+    };
+  });
 }

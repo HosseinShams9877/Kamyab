@@ -36,6 +36,7 @@ export const TASK_TAB_LABELS: Record<TaskTab, string> = {
   assigned: "واگذارشده به دیگران",
   completed: "انجام‌شده",
   archive: "بایگانی",
+  reminders: "یادآوری‌ها",
 };
 
 /** The "N days late" / "due in N days" caption for a task row (Persian digits). */

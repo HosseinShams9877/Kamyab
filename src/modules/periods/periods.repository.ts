@@ -607,7 +607,6 @@ export async function findStageDueCandidates(): Promise<StageDueCandidateRow[]> 
       dueDate: { not: null },
       status: { in: ["PENDING", "IN_PROGRESS", "REJECTED"] },
       period: {
-        status: "ACTIVE",
         case: { status: { not: "CANCELLED" } },
       },
     },

@@ -22,6 +22,7 @@ export {
   countOpenTasksForCase,
   archiveClosedTasksBefore,
   listOverdueOwners,
+  getStageRemindersView,
 } from "./tasks.service";
 export type { TaskResult, TaskWriteData } from "./tasks.service";
 
@@ -40,6 +41,7 @@ export type {
   TaskStats,
   TaskListParams,
   TaskServiceOption,
+  StageReminderRow,
 } from "./tasks.types";
 export { TASK_TABS } from "./tasks.types";
 
@@ -55,3 +57,4 @@ export {
 export { TasksPanel } from "./components/tasks-panel";
 export { TaskForm } from "./components/task-form";
 export { TasksTable } from "./components/tasks-table";
+export { StageRemindersPanel } from "./components/stage-reminders-panel";

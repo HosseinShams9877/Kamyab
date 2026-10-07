@@ -10,11 +10,12 @@ import {
 import { getService, listActiveServiceOptions } from "@/modules/services";
 import { getServicePaths, listDurations } from "@/modules/paths";
 import { listActiveCustomerOptions, saveCaseBirthInfoTx } from "@/modules/customers";
-import { listCaseOwnerOptions } from "@/modules/employees";
+import { listCaseOwnerOptions, listActiveManagerIds } from "@/modules/employees";
 import {
   getThresholds,
   listActiveCancellationReasons,
   getSetting,
+  getInstituteName,
   saveSettings as saveSettingsBatch,
 } from "@/modules/settings";
 import { can, scopeByOwnership, type Authorizable } from "@/modules/permissions";
@@ -40,6 +41,8 @@ import {
   periodHasOpenStages,
   getStageForDueDate,
   setStageDueDateTx,
+  listStageDueCandidates,
+  createStageReminderLog,
   RENEWAL_FORBIDDEN,
   SERVICE_NOT_RENEWABLE,
   NO_ACTIVE_PERIOD,
@@ -56,6 +59,7 @@ import {
   type RenewalFollowUpInput,
   type PeriodActionInput,
 } from "@/modules/periods";
+import { renderStageTemplate } from "@/modules/engine/engine.guards";
 import type { CustomerType, CaseStatus, Role } from "@/types/enums";
 import * as repo from "./cases.repository";
 import type {
@@ -1144,6 +1148,7 @@ export async function changeCaseOwner(
         caseId: input.caseId,
         newOwnerId: input.newOwnerId,
       });
+      await repo.clearStageRemindersForCaseTx(tx, input.caseId); 
       if (input.moveOpenTasks) {
         movedTasks = await repo.moveOpenCaseTasksTx(tx, {
           caseId: input.caseId,
@@ -1262,4 +1267,138 @@ export async function setStageDueDate(
     historyDetail: JSON.stringify({ stageId, dueDate: dueDateInput || null }),
   });
   return { ok: true };
+}
+
+// --- Stage-due notifications (ensure-on-read) ------------------------------
+
+/**
+ * Ensure the recipient users have the "stage due" notifications for any open
+ * stage whose due date is within the configured window (daysBefore) and whose
+ * INTERNAL_NOTIFICATION channel has not fired yet.
+ *
+ * Called from page reads (like the notifications inbox) so the notification
+ * shows up without a manual engine run. SMS is deliberately NOT handled here —
+ * that stays on the engine (it needs the gateway + real-send flag).
+ *
+ * Idempotent: the StageReminderLog unique key (stageId, daysBefore, channel)
+ * guarantees at most one notification per stage per day-before window.
+ */
+export async function ensureStageDueNotifications(): Promise<number> {
+  const settings = await getStageSettings();
+  console.log("[ensureStageDue] settings =", JSON.stringify(settings));
+
+  if (!settings.enabled) {
+    console.log("[ensureStageDue] STOP: enabled = false");
+    return 0;
+  }
+  if (!settings.channels.includes("INTERNAL_NOTIFICATION")) {
+    console.log(
+      "[ensureStageDue] STOP: channels does not include INTERNAL_NOTIFICATION:",
+      settings.channels,
+    );
+    return 0;
+  }
+  if (settings.recipients.length === 0) {
+    console.log("[ensureStageDue] STOP: recipients empty");
+    return 0;
+  }
+
+  const candidates = await listStageDueCandidates();
+  console.log("[ensureStageDue] candidates =", candidates.length);
+  if (candidates.length === 0) return 0;
+
+  console.log(
+    "[ensureStageDue] candidate sample =",
+    JSON.stringify(candidates[0]),
+  );
+  console.log(
+    "[ensureStageDue] daysBefore =",
+    settings.daysBefore,
+    "recipients =",
+    settings.recipients,
+  );
+
+  const [managerIds, instituteName] = await Promise.all([
+    listActiveManagerIds(),
+    getInstituteName(),
+  ]);
+  console.log(
+    "[ensureStageDue] managerIds =",
+    managerIds,
+    "instituteName =",
+    instituteName,
+  );
+
+  let created = 0;
+
+  for (const c of candidates) {
+    console.log(
+      `[ensureStageDue] stage=${c.stageId} daysRemaining=${c.daysRemaining}`,
+    );
+    if (c.daysRemaining > settings.daysBefore) {
+      console.log(
+        `[ensureStageDue] SKIP stage=${c.stageId}: daysRemaining > daysBefore`,
+      );
+      continue;
+    }
+
+    const userIds = new Set<string>();
+    for (const r of settings.recipients) {
+      if (r === "CASE_OWNER") userIds.add(c.ownerId);
+      else if (r === "ALL_MANAGERS") for (const id of managerIds) userIds.add(id);
+    }
+    console.log(
+      `[ensureStageDue] stage=${c.stageId} recipientUserIds=`,
+      [...userIds],
+    );
+    if (userIds.size === 0) {
+      console.log(`[ensureStageDue] SKIP stage=${c.stageId}: no recipients`);
+      continue;
+    }
+
+    // Claim the log row first — if it already exists (P2002), skip.
+    try {
+      await createStageReminderLog({
+        stageId: c.stageId,
+        daysBefore: settings.daysBefore,
+        channel: "INTERNAL_NOTIFICATION",
+      });
+      console.log(`[ensureStageDue] log created for stage=${c.stageId}`);
+    } catch (e) {
+      if (isNumberCollision(e)) {
+        console.log(
+          `[ensureStageDue] SKIP stage=${c.stageId}: log already exists`,
+        );
+        continue;
+      }
+      throw e;
+    }
+
+    const customerName =
+      c.customer.type === "LEGAL"
+        ? c.customer.companyName ?? ""
+        : c.customer.fullName ?? "";
+
+    const message = renderStageTemplate(settings.notificationTemplate, {
+      stageTitle: c.stageTitle,
+      caseNumber: c.caseNumber,
+      customerName,
+      daysRemaining: c.daysRemaining,
+      instituteName,
+    });
+    console.log(
+      `[ensureStageDue] message for stage=${c.stageId}:`,
+      message,
+    );
+
+    await repo.createNotifications([...userIds], message);
+    console.log(
+      `[ensureStageDue] notifications inserted for stage=${c.stageId} users=`,
+      [...userIds],
+    );
+    created += 1;
+  }
+
+  console.log("[ensureStageDue] created =", created);
+  return created;
 }

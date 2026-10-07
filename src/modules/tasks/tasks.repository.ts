@@ -265,3 +265,65 @@ export function setArchived(taskId: string, archived: boolean): Promise<unknown>
 export function deleteTask(taskId: string): Promise<unknown> {
   return prisma.task.delete({ where: { id: taskId } });
 }
+
+// --- Stage-due reminders tab (تب یادآوری‌ها) --------------------------------
+
+export type StageDueRow = {
+  id: string;
+  title: string;
+  dueDate: Date | null;
+  period: {
+    case: {
+      id: string;
+      number: string;
+      ownerId: string;
+      owner: { fullName: string };
+      service: { name: string };
+      customer: {
+        type: string;
+        fullName: string | null;
+        companyName: string | null;
+      };
+    };
+  };
+};
+
+/** Open stages with a due date on an active period of a non-cancelled case,
+ *  optionally scoped to one owner. Soonest due-date first. */
+export async function findStageDueTasks(ownerId?: string): Promise<StageDueRow[]> {
+  return prisma.caseStage.findMany({
+    where: {
+      dueDate: { not: null },
+      status: { in: ["PENDING", "IN_PROGRESS", "REJECTED"] },
+      period: {
+        status: "ACTIVE",
+        case: {
+          status: { not: "CANCELLED" },
+          ...(ownerId ? { ownerId } : {}),
+        },
+      },
+    },
+    orderBy: { dueDate: "asc" },
+    select: {
+      id: true,
+      title: true,
+      dueDate: true,
+      period: {
+        select: {
+          case: {
+            select: {
+              id: true,
+              number: true,
+              ownerId: true,
+              owner: { select: { fullName: true } },
+              service: { select: { name: true } },
+              customer: {
+                select: { type: true, fullName: true, companyName: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}

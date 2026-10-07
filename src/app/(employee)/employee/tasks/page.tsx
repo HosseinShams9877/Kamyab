@@ -9,6 +9,7 @@ import {
   TasksPanel,
   TASK_TABS,
   TASK_TAB_LABELS,
+  getStageRemindersView,
   type TaskTab,
   type TaskListParams,
   type TaskOwnerOption,
@@ -16,6 +17,7 @@ import {
 } from "@/modules/tasks";
 import { listActiveResults } from "@/modules/followups";
 import { listCaseOwnerOptions } from "@/modules/employees";
+import { ensureStageDueNotifications } from "@/modules/cases";
 import { toPersianDigits } from "@/lib/digits";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +31,10 @@ export default async function EmployeeTasksPage({
   if (!can(user, "tasks.view_all") && !can(user, "tasks.view_own")) {
     redirect("/employee");
   }
+
+  // Make sure any stage-due notifications that are due right now exist before
+  // we read (no engine run needed for the in-app channel).
+  await ensureStageDueNotifications();
 
   const sp = await searchParams;
   const tab: TaskTab = (TASK_TABS as string[]).includes(sp.tab ?? "")
@@ -44,13 +50,15 @@ export default async function EmployeeTasksPage({
         : "",
   };
 
-  const [tasks, stats, services, ownerRows, results] = await Promise.all([
-    getTasksView(user, tab, params),
-    getTaskStats(user),
-    listTaskServiceOptions(),
-    listCaseOwnerOptions(),
-    listActiveResults(),
-  ]);
+  const [tasks, stats, services, ownerRows, results, stageReminders] =
+    await Promise.all([
+      getTasksView(user, tab, params),
+      getTaskStats(user),
+      listTaskServiceOptions(),
+      listCaseOwnerOptions(),
+      listActiveResults(),
+      getStageRemindersView(user),
+    ]);
 
   const owners: TaskOwnerOption[] = ownerRows.map((o) => ({
     id: o.id,
@@ -111,6 +119,7 @@ export default async function EmployeeTasksPage({
 
       <TasksPanel
         tasks={tasks}
+        stageReminders={stageReminders}
         tab={tab}
         tabs={tabs}
         owners={owners}

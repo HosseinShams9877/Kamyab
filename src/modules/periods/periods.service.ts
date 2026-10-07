@@ -434,11 +434,24 @@ export async function listStageDueCandidates(
   now: Date = new Date(),
 ): Promise<StageDueCandidate[]> {
   const rows = await repo.findStageDueCandidates();
+  console.log("[listStageDueCandidates] rows from repo =", rows.length);
+
   const out: StageDueCandidate[] = [];
   for (const r of rows) {
-    if (!r.dueDate) continue;
+    if (!r.dueDate) {
+      console.log(`[listStageDueCandidates] SKIP ${r.id}: no dueDate`);
+      continue;
+    }
     const daysRemaining = daysRemainingFromDate(r.dueDate, now);
-    if (daysRemaining === null) continue;
+    if (daysRemaining === null) {
+      console.log(
+        `[listStageDueCandidates] SKIP ${r.id}: daysRemaining null`,
+      );
+      continue;
+    }
+    console.log(
+      `[listStageDueCandidates] include ${r.id} due=${r.dueDate.toISOString()} daysRemaining=${daysRemaining}`,
+    );
     out.push({
       stageId: r.id,
       stageTitle: r.title,
@@ -457,6 +470,7 @@ export async function listStageDueCandidates(
       },
     });
   }
+  console.log("[listStageDueCandidates] out =", out.length);
   return out;
 }
 

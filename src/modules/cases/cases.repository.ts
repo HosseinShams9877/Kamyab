@@ -495,3 +495,33 @@ export function notifyUserTx(
     data: { userId: args.userId, message: args.message },
   });
 }
+
+// --- Stage-due notifications (ensure-on-read) -------------------------------
+
+/** Insert one notification row per user, in a single statement. */
+export async function createNotifications(
+  userIds: string[],
+  message: string,
+): Promise<void> {
+  if (userIds.length === 0) return;
+  await prisma.notification.createMany({
+    data: userIds.map((userId) => ({ userId, message })),
+  });
+}
+
+/** Delete every StageReminderLog row attached to the open stages of a case.
+ *  Used when the case's owner changes so the next ensure-on-read pass can
+ *  re-create the notifications for the NEW owner. */
+export async function clearStageRemindersForCaseTx(
+  tx: Prisma.TransactionClient,
+  caseId: string,
+): Promise<void> {
+  const stages = await tx.caseStage.findMany({
+    where: { period: { caseId } },
+    select: { id: true },
+  });
+  if (stages.length === 0) return;
+  await tx.stageReminderLog.deleteMany({
+    where: { stageId: { in: stages.map((s) => s.id) } },
+  });
+}

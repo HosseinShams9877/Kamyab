@@ -10,6 +10,22 @@ const field =
   "w-full rounded-control border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary disabled:opacity-50";
 const label = "mb-2 block text-sm font-medium text-text";
 
+const NOTIFICATION_VARS = [
+  "{stageTitle}",
+  "{caseNumber}",
+  "{customerName}",
+  "{daysRemaining}",
+  "{instituteName}",
+] as const;
+
+const SMS_VARS = [
+  "{stageTitle}",
+  "{caseNumber}",
+  "{customerName}",
+  "{daysRemaining}",
+  "{instituteName}",
+] as const;
+
 export function StageSettingsPanel({
   initial,
   canEdit,
@@ -42,6 +58,14 @@ export function StageSettingsPanel({
         ? p.recipients.filter((x) => x !== r)
         : [...p.recipients, r],
     }));
+  }
+
+  function appendNotificationVar(v: string) {
+    setS((p) => ({ ...p, notificationTemplate: p.notificationTemplate + " " + v }));
+  }
+
+  function appendSmsVar(v: string) {
+    setS((p) => ({ ...p, smsTemplate: p.smsTemplate + " " + v }));
   }
 
   async function submit() {
@@ -179,10 +203,20 @@ export function StageSettingsPanel({
           dir="rtl"
           className={field}
         />
-        <p className="mt-1 text-xs text-text-secondary">
-          متغیرها: {"{stageTitle}"}، {"{caseNumber}"}، {"{customerName}"}،{" "}
-          {"{daysRemaining}"}، {"{instituteName}"}
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-text-secondary">
+          <span>متغیرها:</span>
+          {NOTIFICATION_VARS.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => appendNotificationVar(v)}
+              disabled={!canEdit || working}
+              className="rounded-control border border-border bg-page px-2 py-0.5 text-xs text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>
@@ -195,10 +229,20 @@ export function StageSettingsPanel({
           dir="rtl"
           className={field}
         />
-        <p className="mt-1 text-xs text-text-secondary">
-          متغیرها: {"{stageTitle}"}، {"{caseNumber}"}، {"{customerName}"}،{" "}
-          {"{daysRemaining}"}، {"{instituteName}"}
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-text-secondary">
+          <span>متغیرها:</span>
+          {SMS_VARS.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => appendSmsVar(v)}
+              disabled={!canEdit || working}
+              className="rounded-control border border-border bg-page px-2 py-0.5 text-xs text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
 
       {canEdit && (

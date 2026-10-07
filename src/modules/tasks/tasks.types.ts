@@ -6,7 +6,8 @@ import type { TaskPriority, TaskStatus } from "@/types/enums";
 export type TaskPriorityKey = TaskPriority; // NORMAL | HIGH | URGENT
 export type TaskStatusKey = TaskStatus; // OPEN | COMPLETED | CANCELLED
 
-/** The seven views of the tasks page (C-11). "overdue" is computed, never stored. */
+/** The eight views of the tasks page (C-11). "overdue" and "reminders" are
+ *  computed, never stored. */
 export type TaskTab =
   | "all"
   | "today"
@@ -14,7 +15,8 @@ export type TaskTab =
   | "mine"
   | "assigned"
   | "completed"
-  | "archive";
+  | "archive"
+  | "reminders";
 
 export const TASK_TABS: TaskTab[] = [
   "all",
@@ -24,6 +26,7 @@ export const TASK_TABS: TaskTab[] = [
   "assigned",
   "completed",
   "archive",
+  "reminders",
 ];
 
 /** A task as shown in a list (Jalali date strings; overdue + hasFollowUp are
@@ -86,4 +89,21 @@ export type TaskFormData = {
   /** customerId → that customer's active cases. */
   casesByCustomer: Record<string, TaskCaseOption[]>;
   currentUserId: string;
+};
+
+// --- Stage-due reminders tab (تب یادآوری‌ها) --------------------------------
+
+/** A stage row with a due date, as shown in the reminders tab. */
+export type StageReminderRow = {
+  stageId: string;
+  stageTitle: string;
+  caseId: string;
+  caseNumber: string;
+  customerName: string;
+  serviceName: string;
+  ownerName: string;
+  dueDate: string | null; // Jalali YYYY/MM/DD
+  daysRemaining: number | null;
+  isPast: boolean;
+  isToday: boolean;
 };

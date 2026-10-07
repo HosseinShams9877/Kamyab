@@ -7,11 +7,14 @@ import type {
   TaskOwnerOption,
   TaskServiceOption,
   TaskListParams,
+  StageReminderRow,
 } from "../tasks.types";
 import { TasksTable } from "./tasks-table";
+import { StageRemindersPanel } from "./stage-reminders-panel";
 
 export function TasksPanel({
   tasks,
+  stageReminders,
   tab,
   tabs,
   owners,
@@ -22,6 +25,7 @@ export function TasksPanel({
   showOwnerFilter = true,
 }: {
   tasks: TaskRow[];
+  stageReminders: StageReminderRow[];
   tab: TaskTab;
   tabs: { key: TaskTab; label: string }[];
   owners: TaskOwnerOption[];
@@ -57,16 +61,20 @@ export function TasksPanel({
         })}
       </div>
 
-      <TasksTable
-        items={tasks}
-        params={params}
-        owners={owners}
-        services={services}
-        results={results}
-        basePath={basePath}
-        currentTab={tab}
-        showOwnerFilter={showOwnerFilter}
-      />
+      {tab === "reminders" ? (
+        <StageRemindersPanel rows={stageReminders} basePath={basePath} />
+      ) : (
+        <TasksTable
+          items={tasks}
+          params={params}
+          owners={owners}
+          services={services}
+          results={results}
+          basePath={basePath}
+          currentTab={tab}
+          showOwnerFilter={showOwnerFilter}
+        />
+      )}
     </div>
   );
 }

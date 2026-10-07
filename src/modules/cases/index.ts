@@ -42,6 +42,7 @@ export {
   getStageSettings,
   saveStageSettings,
   setStageDueDate,
+  ensureStageDueNotifications,
 } from "./cases.service";
 export type { CasePage, CaseMutationArgs } from "./cases.service";
 
