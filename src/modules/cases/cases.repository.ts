@@ -525,3 +525,12 @@ export async function clearStageRemindersForCaseTx(
     where: { stageId: { in: stages.map((s) => s.id) } },
   });
 }
+/** Delete every StageReminderLog row attached to a given stage (all channels).
+ *  Called when a stage's due date changes so the next ensure-on-read pass can
+ *  re-create the notifications for the new state. */
+export async function clearStageRemindersForStageTx(
+  tx: Prisma.TransactionClient,
+  stageId: string,
+): Promise<void> {
+  await tx.stageReminderLog.deleteMany({ where: { stageId } });
+}

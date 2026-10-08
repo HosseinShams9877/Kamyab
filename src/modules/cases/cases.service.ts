@@ -1148,7 +1148,9 @@ export async function changeCaseOwner(
         caseId: input.caseId,
         newOwnerId: input.newOwnerId,
       });
-      await repo.clearStageRemindersForCaseTx(tx, input.caseId); 
+      // Clear this case's stage reminder logs so the next ensure-on-read pass
+      // re-creates them for the NEW owner.
+      await repo.clearStageRemindersForCaseTx(tx, input.caseId);
       if (input.moveOpenTasks) {
         movedTasks = await repo.moveOpenCaseTasksTx(tx, {
           caseId: input.caseId,
@@ -1168,6 +1170,9 @@ export async function changeCaseOwner(
       ...(note ? { note } : {}),
     }),
   });
+
+  // Re-run the stage-due pass so the new owner gets their reminder right away.
+  await ensureStageDueNotifications();
 
   return { ok: true, movedTasks };
 }
@@ -1262,10 +1267,19 @@ export async function setStageDueDate(
     caseId: ctx.caseId,
     actorId: user.id,
     promoteFromNew: false,
-    apply: (tx) => setStageDueDateTx(tx, stageId, dueDate),
+    apply: async (tx) => {
+      await setStageDueDateTx(tx, stageId, dueDate);
+      // Any prior reminder log for this stage is now stale (the window may
+      // have changed). Clear it so the next ensure-on-read pass re-creates it.
+      await repo.clearStageRemindersForStageTx(tx, stageId);
+    },
     historyAction: "stage.due_date_set",
     historyDetail: JSON.stringify({ stageId, dueDate: dueDateInput || null }),
   });
+
+  // Re-run the stage-due pass so a fresh reminder goes out for the new date.
+  await ensureStageDueNotifications();
+
   return { ok: true };
 }
 

@@ -296,7 +296,7 @@ export async function findStageDueTasks(ownerId?: string): Promise<StageDueRow[]
       dueDate: { not: null },
       status: { in: ["PENDING", "IN_PROGRESS", "REJECTED"] },
       period: {
-        status: "ACTIVE",
+        
         case: {
           status: { not: "CANCELLED" },
           ...(ownerId ? { ownerId } : {}),
