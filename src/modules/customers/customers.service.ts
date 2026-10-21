@@ -75,8 +75,8 @@ function toWriteData(
   const isNatural = input.type === "NATURAL";
   return {
     type: input.type,
-    fullName: isNatural ? orNull(input.fullName) : null,
-    companyName: isNatural ? null : orNull(input.companyName),
+    fullName: isNatural ? orNull(input.fullName) : orNull(input.fullName),
+    companyName: isNatural ? orNull(input.companyName) : orNull(input.companyName),
     mobile: input.mobile,
     nationalId: isNatural ? orNull(input.nationalId) : null,
     nationalEntityId: isNatural ? null : orNull(input.nationalEntityId),

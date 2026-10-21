@@ -150,31 +150,37 @@ export function CustomerForm(props: Props) {
         </select>
       </div>
 
-      {isNatural ? (
-        <div>
-          <label htmlFor="fullName" className={labelClass}>نام و نام خانوادگی</label>
-          <input
-            id="fullName"
-            type="text"
-            dir="rtl"
-            className={inputClass}
-            {...register("fullName")}
-          />
-          {errors.fullName && <p className={errorClass}>{errors.fullName.message}</p>}
-        </div>
-      ) : (
-        <div>
-          <label htmlFor="companyName" className={labelClass}>نام شرکت</label>
-          <input
-            id="companyName"
-            type="text"
-            dir="rtl"
-            className={inputClass}
-            {...register("companyName")}
-          />
-          {errors.companyName && <p className={errorClass}>{errors.companyName.message}</p>}
-        </div>
-      )}
+      {/* Both name fields are shown. The one matching the type is required; the
+          other is optional (e.g. a natural person may also have a company). */}
+      <div>
+        <label htmlFor="fullName" className={labelClass}>
+          نام و نام خانوادگی
+          {!isNatural && " (اختیاری)"}
+        </label>
+        <input
+          id="fullName"
+          type="text"
+          dir="rtl"
+          className={inputClass}
+          {...register("fullName")}
+        />
+        {errors.fullName && <p className={errorClass}>{errors.fullName.message}</p>}
+      </div>
+
+      <div>
+        <label htmlFor="companyName" className={labelClass}>
+          نام شرکت
+          {isNatural && " (اختیاری)"}
+        </label>
+        <input
+          id="companyName"
+          type="text"
+          dir="rtl"
+          className={inputClass}
+          {...register("companyName")}
+        />
+        {errors.companyName && <p className={errorClass}>{errors.companyName.message}</p>}
+      </div>
 
       {/* Mobile — Persian glyphs right-aligned, ASCII stored. */}
       <div>

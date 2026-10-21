@@ -23,10 +23,6 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  // `customers.view` is a global (non-owner-scoped) permission, so an employee
-  // who holds it may open any customer — this shared /customers/[id] route serves
-  // both roles. The cases listed here still link into /cases/[id], which gates by
-  // ownership, and every mutation API re-checks (rule 3).
   if (!can(user, "customers.view")) {
     redirect(user.role === "EMPLOYEE" ? "/employee" : "/dashboard");
   }
@@ -90,9 +86,23 @@ export default async function CustomerDetailPage({
           </Link>
         )}
       </div>
-      {/* Top card: contact info, identity, and greeting state. */}
+
       <section className="mb-6 rounded-card border border-border bg-card p-6 shadow-card">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+          {isNatural && customer.companyName && (
+            <div className="sm:col-span-2">
+              <dt className="text-sm text-text-secondary">نام شرکت</dt>
+              <dd className="mt-0.5 text-text">{customer.companyName}</dd>
+            </div>
+          )}
+
+          {!isNatural && customer.fullName && (
+            <div className="sm:col-span-2">
+              <dt className="text-sm text-text-secondary">شخص رابط</dt>
+              <dd className="mt-0.5 text-text">{customer.fullName}</dd>
+            </div>
+          )}
+
           <div>
             <dt className="text-sm text-text-secondary">موبایل</dt>
             <dd className="mt-0.5 text-text" dir="ltr">{toPersianDigits(customer.mobile)}</dd>
@@ -141,8 +151,7 @@ export default async function CustomerDetailPage({
           </div>
         </dl>
       </section>
-      {/* Cases: status, current stage, path progress, and per-case balance —
-          all computed at read time. Empty until cases exist (Phase 9). */}
+
       <section className="mb-6">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-text">پرونده‌ها</h2>
@@ -197,7 +206,6 @@ export default async function CustomerDetailPage({
         </div>
       </section>
 
-      {/* Follow-up timeline across all of this customer's cases, newest first. */}
       <section className="mb-6">
         <h2 className="mb-3 text-lg font-bold text-text">پیگیری‌ها</h2>
         {page.followUps.length === 0 ? (

@@ -87,6 +87,20 @@ export default async function EmployeeCustomerDetailPage({
 
       <section className="mb-6 rounded-card border border-border bg-card p-6 shadow-card">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+          {isNatural && customer.companyName && (
+            <div className="sm:col-span-2">
+              <dt className="text-sm text-text-secondary">نام شرکت</dt>
+              <dd className="mt-0.5 text-text">{customer.companyName}</dd>
+            </div>
+          )}
+
+          {!isNatural && customer.fullName && (
+            <div className="sm:col-span-2">
+              <dt className="text-sm text-text-secondary">شخص رابط</dt>
+              <dd className="mt-0.5 text-text">{customer.fullName}</dd>
+            </div>
+          )}
+
           <div>
             <dt className="text-sm text-text-secondary">موبایل</dt>
             <dd className="mt-0.5 text-text" dir="ltr">{toPersianDigits(customer.mobile)}</dd>
